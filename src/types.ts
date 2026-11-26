@@ -207,6 +207,7 @@ export interface HowItWorksStep {
 export interface SiteConfig {
   brandName: string;
   brandSubtitle: string;
+  headquartersAddress: string;
   heroKicker: string;
   heroTitle: string;
   heroDescription: string;

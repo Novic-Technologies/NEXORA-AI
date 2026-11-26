@@ -17,9 +17,16 @@ import {
   loginInvestor,
   registerInvestor,
 } from '../lib/api.ts';
+import {
+  findCountryByName,
+  formatInternationalPhone,
+  parseInternationalPhone,
+  type CountryOption,
+} from '../lib/countries.ts';
 import { compressImageToDataUrl } from '../lib/imageUpload.ts';
 import type { InvestorClassification, InvestorProfile } from '../types.ts';
 import { BrandLogo } from './BrandLogo.tsx';
+import { CountrySelectField, PhoneDialInputField } from './CountryPhonePicker.tsx';
 
 interface AuthViewProps {
   initialMode?: 'signin' | 'register' | 'claim_admin';
@@ -65,6 +72,16 @@ export function AuthView({
   const switchMode = (next: 'signin' | 'register' | 'claim_admin') => {
     setMode(next);
     setError(null);
+  };
+
+  const handleCountrySelect = (picked: CountryOption) => {
+    setCountry(picked.name);
+    const parsed = parseInternationalPhone(phone, picked.name);
+    if (parsed.nationalNumber) {
+      setPhone(formatInternationalPhone(picked.dialCode, parsed.nationalNumber));
+    } else if (phone.trim()) {
+      setPhone(`${picked.dialCode} `);
+    }
   };
 
   const handleAvatarUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -120,7 +137,7 @@ export function AuthView({
         return;
       }
       if (country.trim().length < 2) {
-        setError('Enter your country of residence.');
+        setError('Tap to select your country of residence.');
         return;
       }
     }
@@ -276,7 +293,7 @@ export function AuthView({
                     required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder={mode === 'claim_admin' ? 'Joseph Muwonge' : 'Full name'}
+                    placeholder="Full legal name"
                     className="w-full h-11 px-3.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                   />
                 </div>
@@ -285,41 +302,40 @@ export function AuthView({
 
             {mode === 'register' && (
               <>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label
-                      htmlFor="app-phone"
-                      className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
-                    >
-                      Phone number
-                    </label>
-                    <input
-                      id="app-phone"
-                      type="tel"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+256 700 000 000"
-                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="app-country"
-                      className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
-                    >
-                      Country
-                    </label>
-                    <input
-                      id="app-country"
-                      type="text"
-                      required
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value)}
-                      placeholder="Uganda"
-                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-                    />
-                  </div>
+                <div>
+                  <label
+                    htmlFor="app-country"
+                    className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
+                  >
+                    Country / Jurisdiction
+                  </label>
+                  <CountrySelectField
+                    id="app-country"
+                    value={country}
+                    onChange={handleCountrySelect}
+                    placeholder="Click to select country"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="app-phone"
+                    className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
+                  >
+                    Phone number
+                  </label>
+                  <PhoneDialInputField
+                    id="app-phone"
+                    value={phone}
+                    countryName={country}
+                    required
+                    onChange={(nextPhone, dialCountry) => {
+                      setPhone(nextPhone);
+                      if (!country && dialCountry) {
+                        setCountry(dialCountry.name);
+                      }
+                    }}
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5">
@@ -335,7 +351,9 @@ export function AuthView({
                       type="text"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
-                      placeholder="Kampala"
+                      placeholder={
+                        findCountryByName(country)?.sampleCity || 'City (optional)'
+                      }
                       className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                     />
                   </div>
@@ -516,7 +534,7 @@ export function AuthView({
               <span>Preview Investor Account</span>
             </p>
             <p className="mt-0.5 text-[11px] text-[#6B7280] dark:text-[#94A3B8] leading-snug">
-              Explore live rentals, referrals & rewards as Daniel Kigozi.
+              Explore live rentals, referrals & rewards as Daniel Meier.
             </p>
           </div>
           <button

@@ -39,11 +39,12 @@ export interface DatabaseState {
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'nexora_db.json');
 
-export const DEMO_INVESTOR_EMAIL = 'daniel.kigozi@nexora.ai';
+export const DEMO_INVESTOR_EMAIL = 'daniel.meier@nexora.ai';
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   brandName: 'Nexora AI',
   brandSubtitle: 'Robotics Fleet',
+  headquartersAddress: 'Technoparkstrasse 1, Tower A, 8005 Zurich, Switzerland',
   heroKicker: '6 European Facilities',
   heroTitle: 'Industrial AI Robotics Leasing',
   heroDescription:
@@ -307,17 +308,17 @@ function seedDemoInvestor(db: DatabaseState): boolean {
     id: demoId,
     role: 'investor',
     accountStatus: 'active',
-    fullName: 'Daniel Kigozi',
+    fullName: 'Daniel Meier',
     email: DEMO_INVESTOR_EMAIL,
-    phone: '+256 700 418 920',
-    companyName: 'Kampala Industrial Holdings',
-    country: 'Uganda',
-    city: 'Kampala',
+    phone: '+41 44 580 24 90',
+    companyName: 'Helvetia Robotics Partners',
+    country: 'Switzerland',
+    city: 'Zurich',
     investorType: 'Individual Investor',
     kycStatus: 'pending',
     verification: {
-      documentType: 'National ID',
-      documentNumber: 'CM92048105KLM',
+      documentType: 'Passport',
+      documentNumber: 'CH-P8849201',
       frontImageUrl: '/src/assets/images/hero_robotics_floor_1795701351020.jpg',
       backOrSelfieUrl: '/src/assets/images/robot_service_ai_1795701352399.jpg',
       sourceOfFunds: 'Business Revenue & Capital Reserve',
@@ -344,12 +345,12 @@ function seedDemoInvestor(db: DatabaseState): boolean {
     id: partnerId,
     role: 'investor',
     accountStatus: 'active',
-    fullName: 'Amara Osei',
-    email: 'amara.osei@nexora.ai',
-    phone: '+233 24 890 3310',
-    companyName: 'Accra Automation Capital',
-    country: 'Ghana',
-    city: 'Accra',
+    fullName: 'Elena Vance',
+    email: 'elena.vance@nexora.ai',
+    phone: '+65 6701 8840',
+    companyName: 'Marina Bay Robotics Capital',
+    country: 'Singapore',
+    city: 'Singapore',
     investorType: 'Corporate Partner',
     kycStatus: 'verified',
     walletBalance: 200,
@@ -357,10 +358,10 @@ function seedDemoInvestor(db: DatabaseState): boolean {
     totalDeposited: 2600,
     totalWithdrawn: 0,
     totalYieldCollected: 0,
-    referralCode: 'NX-AMA410',
+    referralCode: 'NX-ELE410',
     referredByUserId: demoId,
     referredByCode: 'NX-DAN720',
-    referredByName: 'Daniel Kigozi',
+    referredByName: 'Daniel Meier',
     referralBonusEarned: 0,
     hasApprovedDeposit: true,
     createdAt: oneDayAgo,
@@ -456,7 +457,7 @@ function seedDemoInvestor(db: DatabaseState): boolean {
     type: 'referral_reward',
     amount: 143,
     status: 'completed',
-    reference: 'Invite Reward (5.5%) · Amara Osei $2,600 deposit + 2x Yield Unlocked',
+    reference: 'Invite Reward (5.5%) · Elena Vance $2,600 deposit + 2x Yield Unlocked',
     createdAt: oneDayAgo,
   };
 
@@ -501,7 +502,7 @@ function seedDemoInvestor(db: DatabaseState): boolean {
       userId: demoId,
       title: 'Referral Reward & 2x Daily Yield Unlocked',
       message:
-        'Amara Osei completed a $2,600 deposit via your code NX-DAN720. $143.00 was credited and your Atlas M4 now earns 2x daily yields.',
+        'Elena Vance completed a $2,600 deposit via your code NX-DAN720. $143.00 was credited and your Atlas M4 now earns 2x daily yields.',
       category: 'referral',
       read: false,
       actionScreen: 'referrals',
@@ -577,6 +578,10 @@ function normalizeSiteConfig(cfg?: Partial<SiteConfig>): SiteConfig {
   return {
     ...DEFAULT_SITE_CONFIG,
     ...(cfg ?? {}),
+    headquartersAddress:
+      typeof cfg?.headquartersAddress === 'string' && cfg.headquartersAddress.trim()
+        ? cfg.headquartersAddress.trim()
+        : DEFAULT_SITE_CONFIG.headquartersAddress,
     howItWorksSteps:
       Array.isArray(cfg?.howItWorksSteps) && cfg.howItWorksSteps.length > 0
         ? cfg.howItWorksSteps

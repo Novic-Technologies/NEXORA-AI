@@ -267,7 +267,7 @@ export function VerificationView({
                   required
                   value={documentNumber}
                   onChange={(e) => setDocumentNumber(e.target.value)}
-                  placeholder="e.g. CM92048105K"
+                  placeholder="e.g. P9048217A"
                   className="w-full h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
               </div>

@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Cpu,
   Gift,
+  MapPin,
   Megaphone,
   ShieldCheck,
   Wallet,
@@ -422,11 +423,25 @@ export function OverviewView({
           </ul>
         </section>
 
-        <footer className="pt-3 border-t border-[#E5E7EB] dark:border-[#1E293B] flex items-center justify-between gap-2 text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
-          <BrandLogo size="sm" brandName={brandName} />
-          <p className="text-[10.5px] text-right">
-            {site?.footerNotice || '© 2026 Nexora AI Robotics'}
-          </p>
+        <footer className="pt-3.5 border-t border-[#E5E7EB] dark:border-[#1E293B] space-y-2.5 text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
+          <div className="flex items-start gap-2 rounded-xl bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] p-3">
+            <MapPin className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-[10.5px] font-semibold text-[#111827] dark:text-[#F8FAFC]">
+                {brandName} Global Headquarters
+              </p>
+              <p className="text-[10.5px] leading-snug">
+                {site?.headquartersAddress ||
+                  'Technoparkstrasse 1, Tower A, 8005 Zurich, Switzerland'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <BrandLogo size="sm" brandName={brandName} />
+            <p className="text-[10.5px] text-right">
+              {site?.footerNotice || '© 2026 Nexora AI Robotics'}
+            </p>
+          </div>
         </footer>
       </div>
 

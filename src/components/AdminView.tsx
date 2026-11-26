@@ -46,6 +46,11 @@ import {
   updateSiteConfig,
   updateUserRole,
 } from '../lib/api.ts';
+import {
+  formatInternationalPhone,
+  parseInternationalPhone,
+  type CountryOption,
+} from '../lib/countries.ts';
 import { compressImageToDataUrl } from '../lib/imageUpload.ts';
 import type {
   AccountStatus,
@@ -60,6 +65,7 @@ import type {
   SiteConfig,
   UserRole,
 } from '../types.ts';
+import { CountrySelectField, PhoneDialInputField } from './CountryPhonePicker.tsx';
 
 interface AdminViewProps {
   currentUser: InvestorProfile;
@@ -1512,6 +1518,21 @@ export function AdminView({
 
                 <div>
                   <label className="block text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
+                    Corporate Headquarters Address
+                  </label>
+                  <input
+                    type="text"
+                    value={activeSite.headquartersAddress}
+                    onChange={(e) =>
+                      setSiteDraft({ ...activeSite, headquartersAddress: e.target.value })
+                    }
+                    placeholder="Technoparkstrasse 1, Tower A, 8005 Zurich, Switzerland"
+                    className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
                     Top Announcement Banner (blank to hide)
                   </label>
                   <input
@@ -1936,20 +1957,31 @@ export function AdminView({
               placeholder="Temporary Password (min 6 chars)"
               className="w-full h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
             />
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                value={newUserPhone}
-                onChange={(e) => setNewUserPhone(e.target.value)}
-                placeholder="Phone"
-                className="h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
-              />
-              <input
-                type="text"
+            <div className="space-y-2">
+              <CountrySelectField
                 value={newUserCountry}
-                onChange={(e) => setNewUserCountry(e.target.value)}
-                placeholder="Country"
-                className="h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
+                compact
+                placeholder="Click to select country"
+                onChange={(picked: CountryOption) => {
+                  setNewUserCountry(picked.name);
+                  const parsed = parseInternationalPhone(newUserPhone, picked.name);
+                  if (parsed.nationalNumber) {
+                    setNewUserPhone(
+                      formatInternationalPhone(picked.dialCode, parsed.nationalNumber)
+                    );
+                  }
+                }}
+              />
+              <PhoneDialInputField
+                value={newUserPhone}
+                countryName={newUserCountry}
+                compact
+                onChange={(nextPhone, dialCountry) => {
+                  setNewUserPhone(nextPhone);
+                  if (!newUserCountry && dialCountry) {
+                    setNewUserCountry(dialCountry.name);
+                  }
+                }}
               />
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -2029,18 +2061,42 @@ export function AdminView({
               </div>
               <div>
                 <label className="block text-[10px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
-                  Phone
+                  Country
                 </label>
-                <input
-                  type="text"
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
+                <CountrySelectField
+                  value={editCountry}
+                  compact
+                  onChange={(picked: CountryOption) => {
+                    setEditCountry(picked.name);
+                    const parsed = parseInternationalPhone(editPhone, picked.name);
+                    if (parsed.nationalNumber) {
+                      setEditPhone(
+                        formatInternationalPhone(picked.dialCode, parsed.nationalNumber)
+                      );
+                    }
+                  }}
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[10px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
+                Phone
+              </label>
+              <PhoneDialInputField
+                value={editPhone}
+                countryName={editCountry}
+                compact
+                onChange={(nextPhone, dialCountry) => {
+                  setEditPhone(nextPhone);
+                  if (!editCountry && dialCountry) {
+                    setEditCountry(dialCountry.name);
+                  }
+                }}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[10px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
                   Company
@@ -2049,17 +2105,6 @@ export function AdminView({
                   type="text"
                   value={editCompany}
                   onChange={(e) => setEditCompany(e.target.value)}
-                  className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
-                  Country
-                </label>
-                <input
-                  type="text"
-                  value={editCountry}
-                  onChange={(e) => setEditCountry(e.target.value)}
                   className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
                 />
               </div>

@@ -1666,8 +1666,8 @@ async function startServer() {
       const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : '';
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
       const password = typeof body.password === 'string' ? body.password : '';
-      const phone = typeof body.phone === 'string' ? body.phone.trim() : '+1 000 000 0000';
-      const country = typeof body.country === 'string' ? body.country.trim() : 'Global';
+      const phone = typeof body.phone === 'string' ? body.phone.trim() : '+41 44 580 00 00';
+      const country = typeof body.country === 'string' ? body.country.trim() : 'Switzerland';
       const companyName =
         typeof body.companyName === 'string' ? body.companyName.trim() : 'Personal Portfolio';
       const role = typeof body.role === 'string' ? (body.role.trim() as UserRole) : 'investor';
@@ -1958,6 +1958,7 @@ async function startServer() {
 
       strField('brandName', 50);
       strField('brandSubtitle', 50);
+      strField('headquartersAddress', 160);
       strField('heroKicker', 60);
       strField('heroTitle', 90);
       strField('heroDescription', 360);

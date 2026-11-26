@@ -14,9 +14,16 @@ import {
   Sun,
 } from 'lucide-react';
 import { formatDateTime, updateInvestorProfile } from '../lib/api.ts';
+import {
+  findCountryByName,
+  formatInternationalPhone,
+  parseInternationalPhone,
+  type CountryOption,
+} from '../lib/countries.ts';
 import { compressImageToDataUrl } from '../lib/imageUpload.ts';
 import type { ThemePreference } from '../lib/useTheme.ts';
 import type { InvestorClassification, InvestorProfile } from '../types.ts';
+import { CountrySelectField, PhoneDialInputField } from './CountryPhonePicker.tsx';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
 
 interface AccountViewProps {
@@ -291,39 +298,46 @@ export function AccountView({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label
-                htmlFor="set-phone"
-                className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
-              >
-                Phone Number
-              </label>
-              <input
-                id="set-phone"
-                type="tel"
-                required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="set-country"
-                className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
-              >
-                Country
-              </label>
-              <input
-                id="set-country"
-                type="text"
-                required
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-              />
-            </div>
+          <div>
+            <label
+              htmlFor="set-country"
+              className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
+            >
+              Country / Jurisdiction
+            </label>
+            <CountrySelectField
+              id="set-country"
+              value={country}
+              onChange={(picked: CountryOption) => {
+                setCountry(picked.name);
+                const parsed = parseInternationalPhone(phone, picked.name);
+                if (parsed.nationalNumber) {
+                  setPhone(formatInternationalPhone(picked.dialCode, parsed.nationalNumber));
+                }
+              }}
+              placeholder="Click to select country"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="set-phone"
+              className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
+            >
+              Phone Number
+            </label>
+            <PhoneDialInputField
+              id="set-phone"
+              value={phone}
+              countryName={country}
+              required
+              onChange={(nextPhone, dialCountry) => {
+                setPhone(nextPhone);
+                if (!country && dialCountry) {
+                  setCountry(dialCountry.name);
+                }
+              }}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
@@ -339,6 +353,7 @@ export function AccountView({
                 type="text"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
+                placeholder={findCountryByName(country)?.sampleCity || 'City'}
                 className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
               />
             </div>
