@@ -5,6 +5,7 @@ import {
   Camera,
   Eye,
   EyeOff,
+  Gift,
   Lock,
   Mail,
   Shield,
@@ -22,7 +23,9 @@ import { BrandLogo } from './BrandLogo.tsx';
 
 interface AuthViewProps {
   initialMode?: 'signin' | 'register' | 'claim_admin';
+  initialReferralCode?: string;
   masterAdminClaimed: boolean;
+  brandName?: string;
   redirectLabel?: string;
   onBack: () => void;
   onAuthenticated: (investor: InvestorProfile) => void;
@@ -36,7 +39,9 @@ const INVESTOR_TYPES: InvestorClassification[] = [
 
 export function AuthView({
   initialMode = 'signin',
+  initialReferralCode = '',
   masterAdminClaimed,
+  brandName = 'Nexora AI',
   redirectLabel,
   onBack,
   onAuthenticated,
@@ -50,6 +55,7 @@ export function AuthView({
   const [companyName, setCompanyName] = useState('');
   const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
+  const [referralCode, setReferralCode] = useState(initialReferralCode);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [investorType, setInvestorType] =
     useState<InvestorClassification>('Individual Investor');
@@ -149,6 +155,7 @@ export function AuthView({
           country: country.trim(),
           city: city.trim() || undefined,
           avatarUrl,
+          referralCode: referralCode.trim() ? referralCode.trim().toUpperCase() : undefined,
           investorType,
         });
         onAuthenticated(res.investor);
@@ -161,50 +168,49 @@ export function AuthView({
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-[#F4F6F9]">
-      {/* Crisp Human-Crafted Header */}
-      <div className="bg-white border-b border-[#E5E7EB] px-4 pt-4 pb-5">
+    <div className="min-h-[100dvh] flex flex-col bg-[#F4F6F9] dark:bg-[#0B1120]">
+      <div className="bg-white dark:bg-[#0F172A] border-b border-[#E5E7EB] dark:border-[#1E293B] px-4 pt-4 pb-5">
         <div className="flex items-center justify-between">
           <button
             type="button"
             onClick={onBack}
             aria-label="Back"
-            className="w-9 h-9 rounded-lg border border-[#E5E7EB] bg-white flex items-center justify-center text-[#111827] hover:bg-[#F9FAFB] cursor-pointer"
+            className="w-9 h-9 rounded-lg border border-[#E5E7EB] dark:border-[#334155] bg-white dark:bg-[#1E293B] flex items-center justify-center text-[#111827] dark:text-[#F8FAFC] hover:bg-[#F9FAFB] dark:hover:bg-[#334155] cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <BrandLogo size="sm" />
+          <BrandLogo size="sm" brandName={brandName} />
           <div className="w-9" />
         </div>
 
         <div className="mt-5">
-          <h1 className="font-display text-[22px] font-bold text-[#111827] leading-tight">
+          <h1 className="font-display text-[22px] font-bold text-[#111827] dark:text-[#F8FAFC] leading-tight">
             {mode === 'signin'
-              ? 'Sign in to Nexora AI'
+              ? `Sign in to ${brandName}`
               : mode === 'claim_admin'
                 ? 'Claim Master Admin'
                 : 'Create investor profile'}
           </h1>
-          <p className="mt-1 text-xs text-[#6B7280] leading-relaxed">
+          <p className="mt-1 text-xs text-[#6B7280] dark:text-[#94A3B8] leading-relaxed">
             {mode === 'claim_admin'
-              ? 'First-run owner setup. Once claimed, you control approvals, verification, and user roles.'
+              ? 'First-run owner setup. Once claimed, you control all users, site display, approvals & roles.'
               : redirectLabel
                 ? `Sign in or register to open ${redirectLabel}.`
-                : 'Access live AI robotics leases, Binance crypto settlement, and verification.'}
+                : 'Access live AI robotics leases, Binance crypto settlement, team rewards & verification.'}
           </p>
         </div>
       </div>
 
       <div className="flex-1 px-4 py-4 space-y-3">
-        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-2xs">
-          <div className="flex rounded-xl bg-[#F3F4F6] p-1">
+        <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-4 shadow-2xs">
+          <div className="flex rounded-xl bg-[#F3F4F6] dark:bg-[#1E293B] p-1">
             <button
               type="button"
               onClick={() => switchMode('signin')}
               className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-colors cursor-pointer ${
                 mode === 'signin'
-                  ? 'bg-white text-[#111827] shadow-2xs'
-                  : 'text-[#6B7280]'
+                  ? 'bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] shadow-2xs'
+                  : 'text-[#6B7280] dark:text-[#94A3B8]'
               }`}
             >
               Sign in
@@ -214,8 +220,8 @@ export function AuthView({
               onClick={() => switchMode('register')}
               className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-colors cursor-pointer ${
                 mode === 'register'
-                  ? 'bg-white text-[#111827] shadow-2xs'
-                  : 'text-[#6B7280]'
+                  ? 'bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] shadow-2xs'
+                  : 'text-[#6B7280] dark:text-[#94A3B8]'
               }`}
             >
               Create account
@@ -225,9 +231,8 @@ export function AuthView({
           <form onSubmit={handleSubmit} className="mt-4 space-y-3" noValidate>
             {(mode === 'register' || mode === 'claim_admin') && (
               <>
-                {/* Profile Photo Picker */}
-                <div className="flex items-center gap-3.5 p-3 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB]">
-                  <div className="w-14 h-14 rounded-full bg-[#E5E7EB] border border-[#D1D5DB] overflow-hidden flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-3.5 p-3 rounded-xl border border-[#E5E7EB] dark:border-[#1E293B] bg-[#F9FAFB] dark:bg-[#0F172A]">
+                  <div className="w-14 h-14 rounded-full bg-[#E5E7EB] dark:bg-[#1E293B] border border-[#D1D5DB] dark:border-[#334155] overflow-hidden flex items-center justify-center shrink-0">
                     {avatarUrl ? (
                       <img
                         src={avatarUrl}
@@ -235,18 +240,18 @@ export function AuthView({
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Camera className="w-5 h-5 text-[#6B7280]" />
+                      <Camera className="w-5 h-5 text-[#6B7280] dark:text-[#94A3B8]" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-[#111827]">
+                    <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]">
                       Profile Photo {mode === 'register' ? '(Recommended)' : '(Optional)'}
                     </p>
-                    <p className="text-[11px] text-[#6B7280]">
+                    <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
                       Required before submitting KYC verification.
                     </p>
-                    <label className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-[#D1D5DB] text-[11px] font-semibold text-[#111827] hover:bg-[#F3F4F6] cursor-pointer">
-                      <Camera className="w-3 h-3 text-[#2563EB]" />
+                    <label className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-[#1E293B] border border-[#D1D5DB] dark:border-[#334155] text-[11px] font-semibold text-[#111827] dark:text-[#F8FAFC] hover:bg-[#F3F4F6] dark:hover:bg-[#334155] cursor-pointer">
+                      <Camera className="w-3 h-3 text-[#2563EB] dark:text-[#60A5FA]" />
                       <span>{avatarUrl ? 'Change photo' : 'Upload photo'}</span>
                       <input
                         type="file"
@@ -261,7 +266,7 @@ export function AuthView({
                 <div>
                   <label
                     htmlFor="app-fullname"
-                    className="block text-[11px] font-semibold text-[#374151] mb-1"
+                    className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
                   >
                     Full legal name
                   </label>
@@ -272,7 +277,7 @@ export function AuthView({
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder={mode === 'claim_admin' ? 'Joseph Muwonge' : 'Full name'}
-                    className="w-full h-11 px-3.5 rounded-xl border border-[#D1D5DB] bg-white text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                    className="w-full h-11 px-3.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                   />
                 </div>
               </>
@@ -284,7 +289,7 @@ export function AuthView({
                   <div>
                     <label
                       htmlFor="app-phone"
-                      className="block text-[11px] font-semibold text-[#374151] mb-1"
+                      className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
                     >
                       Phone number
                     </label>
@@ -295,13 +300,13 @@ export function AuthView({
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+256 700 000 000"
-                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] bg-white text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                     />
                   </div>
                   <div>
                     <label
                       htmlFor="app-country"
-                      className="block text-[11px] font-semibold text-[#374151] mb-1"
+                      className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
                     >
                       Country
                     </label>
@@ -312,7 +317,7 @@ export function AuthView({
                       value={country}
                       onChange={(e) => setCountry(e.target.value)}
                       placeholder="Uganda"
-                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] bg-white text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                     />
                   </div>
                 </div>
@@ -321,7 +326,7 @@ export function AuthView({
                   <div>
                     <label
                       htmlFor="app-city"
-                      className="block text-[11px] font-semibold text-[#374151] mb-1"
+                      className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
                     >
                       City
                     </label>
@@ -331,13 +336,13 @@ export function AuthView({
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       placeholder="Kampala"
-                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] bg-white text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                     />
                   </div>
                   <div>
                     <label
                       htmlFor="app-company"
-                      className="block text-[11px] font-semibold text-[#374151] mb-1"
+                      className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
                     >
                       Company / Fund
                     </label>
@@ -347,32 +352,54 @@ export function AuthView({
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
                       placeholder="Personal"
-                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] bg-white text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                      className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="app-type"
-                    className="block text-[11px] font-semibold text-[#374151] mb-1"
-                  >
-                    Account classification
-                  </label>
-                  <select
-                    id="app-type"
-                    value={investorType}
-                    onChange={(e) =>
-                      setInvestorType(e.target.value as InvestorClassification)
-                    }
-                    className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] bg-white text-xs text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-                  >
-                    {INVESTOR_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label
+                      htmlFor="app-type"
+                      className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
+                    >
+                      Classification
+                    </label>
+                    <select
+                      id="app-type"
+                      value={investorType}
+                      onChange={(e) =>
+                        setInvestorType(e.target.value as InvestorClassification)
+                      }
+                      className="w-full h-11 px-2.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                    >
+                      {INVESTOR_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="app-ref"
+                      className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
+                    >
+                      Invite Code (Optional)
+                    </label>
+                    <div className="relative">
+                      <Gift className="w-3.5 h-3.5 text-[#9CA3AF] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        id="app-ref"
+                        type="text"
+                        value={referralCode}
+                        onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                        placeholder="NX-..."
+                        className="w-full h-11 pl-8 pr-2.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-xs uppercase text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                      />
+                    </div>
+                  </div>
                 </div>
               </>
             )}
@@ -380,7 +407,7 @@ export function AuthView({
             <div>
               <label
                 htmlFor="app-email"
-                className="block text-[11px] font-semibold text-[#374151] mb-1"
+                className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
               >
                 Email address
               </label>
@@ -393,7 +420,7 @@ export function AuthView({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="w-full h-11 pl-10 pr-3.5 rounded-xl border border-[#D1D5DB] bg-white text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                  className="w-full h-11 pl-10 pr-3.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
               </div>
             </div>
@@ -401,7 +428,7 @@ export function AuthView({
             <div>
               <label
                 htmlFor="app-password"
-                className="block text-[11px] font-semibold text-[#374151] mb-1"
+                className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
               >
                 Password
               </label>
@@ -416,13 +443,13 @@ export function AuthView({
                   placeholder={
                     mode === 'claim_admin' ? 'At least 8 characters' : 'At least 6 characters'
                   }
-                  className="w-full h-11 pl-10 pr-11 rounded-xl border border-[#D1D5DB] bg-white text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                  className="w-full h-11 pl-10 pr-11 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[#6B7280] hover:text-[#111827] hover:bg-[#F3F4F6] cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[#6B7280] dark:text-[#94A3B8] hover:text-[#111827] dark:hover:text-white hover:bg-[#F3F4F6] dark:hover:bg-[#1E293B] cursor-pointer"
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -436,7 +463,7 @@ export function AuthView({
             {error && (
               <div
                 role="alert"
-                className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-medium text-red-800"
+                className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3 py-2 text-[11px] font-medium text-red-800 dark:text-red-200"
               >
                 {error}
               </div>
@@ -461,16 +488,15 @@ export function AuthView({
           </form>
         </div>
 
-        {/* One-Time Master Admin Claim Card (visible only until claimed) */}
         {!masterAdminClaimed && mode !== 'claim_admin' && (
-          <div className="rounded-2xl border border-[#C7D2FE] bg-[#EEF2FF] p-3.5 flex items-center justify-between gap-3">
+          <div className="rounded-2xl border border-[#C7D2FE] dark:border-indigo-900 bg-[#EEF2FF] dark:bg-indigo-950/60 p-3.5 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-[#1E1B4B] inline-flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-[#4338CA]" />
+              <p className="text-xs font-semibold text-[#1E1B4B] dark:text-indigo-200 inline-flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-[#4338CA] dark:text-indigo-400" />
                 <span>Master Admin not claimed yet</span>
               </p>
-              <p className="mt-0.5 text-[11px] text-[#3730A3] leading-snug">
-                Set up the system Master Admin to approve deposits, withdrawals & roles.
+              <p className="mt-0.5 text-[11px] text-[#3730A3] dark:text-indigo-300 leading-snug">
+                Set up the system Master Admin to control everything system-wide.
               </p>
             </div>
             <button
@@ -483,22 +509,21 @@ export function AuthView({
           </div>
         )}
 
-        {/* Sandbox Investor Quick Entry */}
-        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-3.5 flex items-center justify-between gap-3">
+        <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-3.5 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-[#111827] inline-flex items-center gap-1.5">
-              <UserCheck className="w-3.5 h-3.5 text-[#059669]" />
+            <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC] inline-flex items-center gap-1.5">
+              <UserCheck className="w-3.5 h-3.5 text-[#059669] dark:text-[#34D399]" />
               <span>Preview Investor Account</span>
             </p>
-            <p className="mt-0.5 text-[11px] text-[#6B7280] leading-snug">
-              Explore live robot rentals as Daniel Kigozi (daniel.kigozi@nexora.ai).
+            <p className="mt-0.5 text-[11px] text-[#6B7280] dark:text-[#94A3B8] leading-snug">
+              Explore live rentals, referrals & rewards as Daniel Kigozi.
             </p>
           </div>
           <button
             type="button"
             disabled={submitting}
             onClick={handleDemoLogin}
-            className="px-3 py-2 rounded-lg border border-[#D1D5DB] bg-[#F9FAFB] hover:bg-[#F3F4F6] text-[#111827] text-[11px] font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+            className="px-3 py-2 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-[#F3F4F6] dark:hover:bg-[#334155] text-[#111827] dark:text-[#F8FAFC] text-[11px] font-semibold whitespace-nowrap shrink-0 cursor-pointer"
           >
             Open Demo
           </button>

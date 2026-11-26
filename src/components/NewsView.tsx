@@ -27,18 +27,23 @@ export function NewsView({ dispatches, initialArticleId }: NewsViewProps) {
     (d) => category === 'All' || d.category === category
   );
 
+  const resolveStoryImage = (story: FleetDispatch) =>
+    story.imageUrl ||
+    DISPATCH_IMAGES[story.id] ||
+    '/src/assets/images/hero_robotics_floor_1795701351020.jpg';
+
   return (
     <div className="pb-6 space-y-4">
-      <header className="sticky top-0 z-30 h-14 px-4 bg-white/95 backdrop-blur-md border-b border-[#E2E8F0] flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-30 h-14 px-4 bg-white/95 dark:bg-[#0F172A]/95 backdrop-blur-md border-b border-[#E2E8F0] dark:border-[#1E293B] flex items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-base font-bold text-[#0F172A]">
+          <h1 className="font-display text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">
             Fleet Updates
           </h1>
-          <p className="text-[11px] text-[#64748B]">
+          <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">
             Hardware launches & operational notes
           </p>
         </div>
-        <span className="px-2 py-1 rounded-md bg-[#F1F5F9] border border-[#E2E8F0] font-mono text-[10.5px] font-semibold text-[#475569]">
+        <span className="px-2 py-1 rounded-md bg-[#F1F5F9] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] font-mono text-[10.5px] font-semibold text-[#475569] dark:text-[#CBD5E1]">
           {dispatches.length} stories
         </span>
       </header>
@@ -52,8 +57,8 @@ export function NewsView({ dispatches, initialArticleId }: NewsViewProps) {
               onClick={() => setCategory(cat)}
               className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 category === cat
-                  ? 'bg-[#0B1220] text-white'
-                  : 'bg-white border border-[#E2E8F0] text-[#475569] hover:border-[#CBD5E1]'
+                  ? 'bg-[#0B1220] dark:bg-[#2563EB] text-white'
+                  : 'bg-white dark:bg-[#111827] border border-[#E2E8F0] dark:border-[#1E293B] text-[#475569] dark:text-[#94A3B8] hover:border-[#CBD5E1]'
               }`}
             >
               {cat}
@@ -74,34 +79,31 @@ export function NewsView({ dispatches, initialArticleId }: NewsViewProps) {
                   setActiveStory(story);
                 }
               }}
-              className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden cursor-pointer hover:border-[#CBD5E1] transition-colors"
+              className="bg-white dark:bg-[#111827] border border-[#E2E8F0] dark:border-[#1E293B] rounded-xl overflow-hidden cursor-pointer hover:border-[#CBD5E1] dark:hover:border-[#334155] transition-colors"
             >
-              <div className="aspect-[16/9] bg-[#F1F5F9] overflow-hidden">
+              <div className="aspect-[16/9] bg-[#F1F5F9] dark:bg-[#1E293B] overflow-hidden">
                 <RobotImage
-                  src={
-                    DISPATCH_IMAGES[story.id] ??
-                    '/src/assets/images/hero_robotics_floor_1795701351020.jpg'
-                  }
+                  src={resolveStoryImage(story)}
                   alt={story.title}
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="p-4 space-y-2">
                 <div className="flex items-center gap-2 text-[10.5px]">
-                  <span className="px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#1D4ED8] font-semibold">
+                  <span className="px-1.5 py-0.5 rounded bg-[#EFF6FF] dark:bg-[#1E3A8A]/40 text-[#1D4ED8] dark:text-[#60A5FA] font-semibold">
                     {story.category}
                   </span>
-                  <span className="font-mono text-[#64748B]">
+                  <span className="font-mono text-[#64748B] dark:text-[#94A3B8]">
                     {story.publishedAt}
                   </span>
                 </div>
-                <h2 className="font-display text-sm font-bold text-[#0F172A] leading-snug">
+                <h2 className="font-display text-sm font-bold text-[#0F172A] dark:text-[#F8FAFC] leading-snug">
                   {story.title}
                 </h2>
-                <p className="text-xs text-[#475569] leading-relaxed">
+                <p className="text-xs text-[#475569] dark:text-[#CBD5E1] leading-relaxed">
                   {story.summary}
                 </p>
-                <span className="pt-1 inline-flex items-center gap-1 text-xs font-semibold text-[#1D4ED8]">
+                <span className="pt-1 inline-flex items-center gap-1 text-xs font-semibold text-[#1D4ED8] dark:text-[#60A5FA]">
                   <span>Read dispatch</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </span>
@@ -113,18 +115,18 @@ export function NewsView({ dispatches, initialArticleId }: NewsViewProps) {
 
       {activeStory && (
         <div
-          className="fixed inset-0 z-50 bg-[#0B1220]/60 backdrop-blur-xs flex items-end justify-center"
+          className="fixed inset-0 z-50 bg-[#0B1220]/70 backdrop-blur-xs flex items-end justify-center"
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-[430px] max-h-[85dvh] overflow-y-auto bg-white rounded-t-2xl border-t border-[#E2E8F0] p-5 space-y-4">
-            <div className="w-10 h-1 rounded-full bg-[#CBD5E1] mx-auto" />
+          <div className="w-full max-w-[430px] max-h-[85dvh] overflow-y-auto bg-white dark:bg-[#111827] rounded-t-2xl border-t border-[#E2E8F0] dark:border-[#1E293B] p-5 space-y-4">
+            <div className="w-10 h-1 rounded-full bg-[#CBD5E1] dark:bg-[#334155] mx-auto" />
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs">
-                <span className="px-2 py-0.5 rounded bg-[#EFF6FF] text-[#1D4ED8] font-semibold">
+                <span className="px-2 py-0.5 rounded bg-[#EFF6FF] dark:bg-[#1E3A8A]/40 text-[#1D4ED8] dark:text-[#60A5FA] font-semibold">
                   {activeStory.category}
                 </span>
-                <span className="font-mono text-[#64748B]">
+                <span className="font-mono text-[#64748B] dark:text-[#94A3B8]">
                   {activeStory.publishedAt}
                 </span>
               </div>
@@ -132,28 +134,24 @@ export function NewsView({ dispatches, initialArticleId }: NewsViewProps) {
                 type="button"
                 onClick={() => setActiveStory(null)}
                 aria-label="Close"
-                className="w-9 h-9 rounded-lg border border-[#E2E8F0] flex items-center justify-center text-[#475569] hover:text-[#0F172A] cursor-pointer"
+                className="w-9 h-9 rounded-lg border border-[#E2E8F0] dark:border-[#334155] flex items-center justify-center text-[#475569] dark:text-[#CBD5E1] hover:text-[#0F172A] dark:hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="aspect-[16/9] rounded-xl overflow-hidden bg-[#F1F5F9]">
+            <div className="aspect-[16/9] rounded-xl overflow-hidden bg-[#F1F5F9] dark:bg-[#1E293B]">
               <RobotImage
-                src={
-                  DISPATCH_IMAGES[activeStory.id] ??
-                  '/src/assets/images/hero_robotics_floor_1795701351020.jpg'
-                }
+                src={resolveStoryImage(activeStory)}
                 alt={activeStory.title}
                 className="w-full h-full object-cover"
               />
             </div>
-            <h3 className="font-display text-lg font-bold text-[#0F172A] leading-snug">
+            <h3 className="font-display text-lg font-bold text-[#0F172A] dark:text-[#F8FAFC] leading-snug">
               {activeStory.title}
             </h3>
-            <p className="text-xs text-[#475569] leading-relaxed">
-              {activeStory.summary} Nexora AI continues expanding real-time facility telemetry
-              across deployed robotics hardware while supporting instant crypto settlements
-              through Binance-supported multi-chain deposits and withdrawals.
+            <p className="text-xs text-[#475569] dark:text-[#CBD5E1] leading-relaxed">
+              {activeStory.summary} Active telemetry synchronization and multi-chain Binance
+              crypto settlements remain available 24/7 across all deployed hardware clusters.
             </p>
           </div>
         </div>

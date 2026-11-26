@@ -5,6 +5,7 @@ import {
   Bell,
   Cpu,
   Crown,
+  Gift,
   Home,
   Newspaper,
   Plus,
@@ -20,26 +21,38 @@ import { BrandLogo } from './components/BrandLogo.tsx';
 import { CryptoWalletView } from './components/CryptoWalletView.tsx';
 import { MachinesView } from './components/MachinesView.tsx';
 import { NewsView } from './components/NewsView.tsx';
+import { NotificationsView } from './components/NotificationsView.tsx';
 import { OverviewView } from './components/OverviewView.tsx';
 import { PortfolioView } from './components/PortfolioView.tsx';
+import { OfflineIndicator } from './components/PWAInstallButton.tsx';
+import { ReferralsView } from './components/ReferralsView.tsx';
 import { VerificationView } from './components/VerificationView.tsx';
 import {
   fetchAdminOverview,
   fetchCurrentInvestor,
+  fetchNotifications,
   fetchOverview,
+  fetchReferrals,
   fetchRentals,
   fetchRobots,
   fetchTransactions,
   getAuthToken,
   logoutInvestor,
+  markAllNotificationsRead,
+  markNotificationRead,
   type OverviewResponse,
 } from './lib/api.ts';
+import { useTheme } from './lib/useTheme.ts';
 import type {
   AdminOverviewData,
+  AppNotification,
+  BinanceCoinConfig,
   EnrichedMachineRental,
   FleetDispatch,
   InvestorProfile,
+  ReferralSummary,
   RobotMachine,
+  SiteConfig,
   WalletTransaction,
 } from './types.ts';
 
@@ -52,15 +65,25 @@ type AppScreen =
   | 'activity'
   | 'account'
   | 'verification'
+  | 'notifications'
+  | 'referrals'
   | 'admin'
   | 'auth';
 
 export default function App() {
+  const { preference: themePreference, setPreference: setThemePreference } = useTheme();
+
+  const [initialRefCode] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('ref') || '').trim().toUpperCase();
+  });
+
   const [screen, setScreen] = useState<AppScreen>('home');
   const [pendingScreen, setPendingScreen] = useState<AppScreen | null>(null);
   const [authInitialMode, setAuthInitialMode] = useState<
     'signin' | 'register' | 'claim_admin'
-  >('signin');
+  >(initialRefCode ? 'register' : 'signin');
   const [walletTab, setWalletTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [suggestedDepositUsd, setSuggestedDepositUsd] = useState<number | undefined>(
     undefined
@@ -75,6 +98,9 @@ export default function App() {
   const [robots, setRobots] = useState<RobotMachine[]>([]);
   const [rentals, setRentals] = useState<EnrichedMachineRental[]>([]);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
   const [adminData, setAdminData] = useState<AdminOverviewData | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -112,14 +138,19 @@ export default function App() {
     setWorkspaceLoading(true);
     setGlobalError(null);
     try {
-      const [robotsRes, rentalsRes, txRes] = await Promise.all([
+      const [robotsRes, rentalsRes, txRes, notifRes, refRes] = await Promise.all([
         fetchRobots(),
         fetchRentals(),
         fetchTransactions(),
+        fetchNotifications(),
+        fetchReferrals(),
       ]);
       setRobots(robotsRes.robots);
       setRentals(rentalsRes.rentals);
       setTransactions(txRes.transactions);
+      setNotifications(notifRes.notifications);
+      setUnreadNotifications(notifRes.unreadCount);
+      setReferralSummary(refRes);
     } catch (err) {
       setGlobalError(
         err instanceof Error ? err.message : 'Unable to refresh app data.'
@@ -129,7 +160,6 @@ export default function App() {
     }
   }, []);
 
-  // Real-Time WebSocket Engine connecting to /ws on the same server port
   const connectWebSocket = useCallback(() => {
     if (wsRef.current) {
       wsRef.current.close();
@@ -151,6 +181,9 @@ export default function App() {
           rentals?: EnrichedMachineRental[];
           robots?: RobotMachine[];
           dispatches?: FleetDispatch[];
+          siteConfig?: SiteConfig;
+          cryptoCoins?: BinanceCoinConfig[];
+          appNotification?: AppNotification;
           notification?: string;
         };
 
@@ -162,10 +195,28 @@ export default function App() {
             .catch(() => {});
         } else if (msg.type === 'fleet:updated' && Array.isArray(msg.robots)) {
           setRobots(msg.robots);
+          setOverview((prev) =>
+            prev ? { ...prev, featuredRobots: msg.robots!.slice(0, 6) } : prev
+          );
         } else if (msg.type === 'dispatches:updated' && Array.isArray(msg.dispatches)) {
           setOverview((prev) =>
             prev ? { ...prev, dispatches: msg.dispatches! } : prev
           );
+        } else if (msg.type === 'site:updated' && msg.siteConfig) {
+          setOverview((prev) =>
+            prev ? { ...prev, siteConfig: msg.siteConfig! } : prev
+          );
+        } else if (msg.type === 'coins:updated' && Array.isArray(msg.cryptoCoins)) {
+          setOverview((prev) =>
+            prev ? { ...prev, cryptoCoins: msg.cryptoCoins! } : prev
+          );
+        } else if (msg.type === 'notification:new' && msg.appNotification) {
+          setNotifications((prev) => {
+            if (prev.some((n) => n.id === msg.appNotification!.id)) return prev;
+            return [msg.appNotification!, ...prev];
+          });
+          setUnreadNotifications((c) => c + 1);
+          showToast(msg.appNotification.title);
         } else if (msg.type === 'investor:updated' && msg.investor) {
           setInvestor(msg.investor);
           if (msg.transaction) {
@@ -182,6 +233,9 @@ export default function App() {
           if (msg.notification) {
             showToast(msg.notification);
           }
+          fetchReferrals()
+            .then((r) => setReferralSummary(r))
+            .catch(() => {});
           if (
             msg.investor.role === 'master_admin' ||
             msg.investor.role === 'admin' ||
@@ -214,7 +268,12 @@ export default function App() {
 
   useEffect(() => {
     fetchOverview()
-      .then((data) => setOverview(data))
+      .then((data) => {
+        setOverview(data);
+        if (data.siteConfig?.brandName) {
+          document.title = `${data.siteConfig.brandName} — ${data.siteConfig.brandSubtitle}`;
+        }
+      })
       .catch(() => {});
 
     fetchRobots()
@@ -272,6 +331,8 @@ export default function App() {
       next === 'activity' ||
       next === 'account' ||
       next === 'verification' ||
+      next === 'notifications' ||
+      next === 'referrals' ||
       next === 'admin';
 
     if (requiresAuth && !investor) {
@@ -282,6 +343,17 @@ export default function App() {
 
     if (next === 'admin') {
       void refreshAdminData();
+    } else if (next === 'notifications' && investor) {
+      fetchNotifications()
+        .then((res) => {
+          setNotifications(res.notifications);
+          setUnreadNotifications(res.unreadCount);
+        })
+        .catch(() => {});
+    } else if (next === 'referrals' && investor) {
+      fetchReferrals()
+        .then((res) => setReferralSummary(res))
+        .catch(() => {});
     }
 
     setPendingScreen(null);
@@ -319,6 +391,9 @@ export default function App() {
     setInvestor(null);
     setRentals([]);
     setTransactions([]);
+    setNotifications([]);
+    setUnreadNotifications(0);
+    setReferralSummary(null);
     setAdminData(null);
     connectWebSocket();
     setScreen('home');
@@ -370,19 +445,34 @@ export default function App() {
     }
   };
 
+  const handleMarkNotificationRead = async (id: string) => {
+    await markNotificationRead(id);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+    setUnreadNotifications((c) => Math.max(0, c - 1));
+  };
+
+  const handleMarkAllRead = async () => {
+    await markAllNotificationsRead();
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadNotifications(0);
+  };
+
   const isStaff =
     investor?.role === 'master_admin' ||
     investor?.role === 'admin' ||
     investor?.role === 'moderator';
 
+  const brandName = overview?.siteConfig?.brandName || 'Nexora AI';
   const showBottomBar = screen !== 'auth';
 
   return (
-    <div className="min-h-[100dvh] w-full bg-[#E5E7EB]">
-      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col bg-[#F4F6F9] sm:border-x sm:border-[#D1D5DB] relative shadow-sm">
+    <div className="min-h-[100dvh] w-full bg-[#E5E7EB] dark:bg-[#030712]">
+      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col bg-[#F4F6F9] dark:bg-[#0B1120] sm:border-x sm:border-[#D1D5DB] dark:sm:border-[#1E293B] relative shadow-sm">
         {liveToast && (
           <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-32px)] max-w-[398px]">
-            <div className="rounded-xl bg-[#111827] text-white px-3.5 py-2.5 shadow-lg border border-[#374151] flex items-center justify-between gap-2.5 text-xs">
+            <div className="rounded-xl bg-[#111827] dark:bg-[#1E293B] text-white px-3.5 py-2.5 shadow-lg border border-[#374151] dark:border-[#334155] flex items-center justify-between gap-2.5 text-xs">
               <div className="flex items-center gap-2 min-w-0">
                 <Bell className="w-4 h-4 text-[#60A5FA] shrink-0" />
                 <span className="font-medium leading-snug">{liveToast}</span>
@@ -399,30 +489,40 @@ export default function App() {
           </div>
         )}
 
+        <OfflineIndicator />
+
         <main className={`flex-1 ${showBottomBar ? 'pb-24' : ''}`}>
           {globalError && (
-            <div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-800">
+            <div className="mx-4 mt-4 rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3.5 py-2.5 text-xs font-medium text-red-800 dark:text-red-200">
               {globalError}
             </div>
           )}
 
           {authChecking ? (
             <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-3">
-              <BrandLogo size="lg" />
-              <p className="text-xs font-medium text-[#6B7280]">Connecting to live fleet...</p>
+              <BrandLogo size="lg" brandName={brandName} />
+              <p className="text-xs font-medium text-[#6B7280] dark:text-[#94A3B8]">
+                Connecting to live fleet...
+              </p>
             </div>
           ) : screen === 'auth' ? (
             <AuthView
               initialMode={authInitialMode}
+              initialReferralCode={initialRefCode}
               masterAdminClaimed={overview?.masterAdminClaimed ?? true}
+              brandName={brandName}
               redirectLabel={
                 pendingScreen === 'wallet'
                   ? 'your crypto wallet'
                   : pendingScreen === 'verification'
                     ? 'identity verification'
-                    : pendingScreen === 'mine'
-                      ? 'your portfolio'
-                      : undefined
+                    : pendingScreen === 'referrals'
+                      ? 'team rewards'
+                      : pendingScreen === 'notifications'
+                        ? 'your notifications'
+                        : pendingScreen === 'mine'
+                          ? 'your portfolio'
+                          : undefined
               }
               onBack={() => {
                 setPendingScreen(null);
@@ -434,17 +534,21 @@ export default function App() {
             <OverviewView
               overview={overview}
               investor={investor}
+              unreadNotifications={unreadNotifications}
               onExploreFleet={() => navigateTo('rent')}
               onSelectMachine={(robot) => navigateTo('rent', { robot })}
               onOpenAuth={(mode) => navigateTo('auth', { authMode: mode })}
               onOpenDeposit={() => navigateTo('wallet', { walletMode: 'deposit' })}
               onOpenNews={(articleId) => navigateTo('news', { newsId: articleId })}
               onOpenVerification={() => navigateTo('verification')}
+              onOpenNotifications={() => navigateTo('notifications')}
+              onOpenReferrals={() => navigateTo('referrals')}
             />
           ) : screen === 'rent' ? (
             <MachinesView
               robots={robots}
               investor={investor}
+              siteConfig={overview?.siteConfig}
               loading={workspaceLoading}
               preselectedRobot={preselectedRobot}
               onClearPreselected={() => setPreselectedRobot(null)}
@@ -467,6 +571,7 @@ export default function App() {
             <CryptoWalletView
               key={`${walletTab}-${suggestedDepositUsd ?? 'none'}`}
               investor={investor}
+              cryptoCoins={overview?.cryptoCoins}
               initialTab={walletTab}
               suggestedDepositUsd={suggestedDepositUsd}
               onBack={() => navigateTo('mine')}
@@ -478,6 +583,27 @@ export default function App() {
               investor={investor}
               onBack={() => navigateTo('mine')}
               onUpdated={(updated) => setInvestor(updated)}
+            />
+          ) : screen === 'notifications' && investor ? (
+            <NotificationsView
+              notifications={notifications}
+              loading={workspaceLoading}
+              onBack={() => navigateTo('mine')}
+              onMarkRead={handleMarkNotificationRead}
+              onMarkAllRead={handleMarkAllRead}
+              onNavigateAction={(target) => {
+                if (target) navigateTo(target);
+              }}
+            />
+          ) : screen === 'referrals' && investor ? (
+            <ReferralsView
+              investor={investor}
+              summary={referralSummary}
+              robots={robots}
+              siteConfig={overview?.siteConfig}
+              loading={workspaceLoading}
+              onBack={() => navigateTo('mine')}
+              onBrowseRobots={() => navigateTo('rent')}
             />
           ) : screen === 'admin' && investor && isStaff ? (
             <AdminView
@@ -495,9 +621,12 @@ export default function App() {
           ) : screen === 'account' && investor ? (
             <AccountView
               investor={investor}
+              themePreference={themePreference}
+              onChangeTheme={setThemePreference}
               onBack={() => navigateTo('mine')}
               onUpdated={(updated) => setInvestor(updated)}
               onOpenVerification={() => navigateTo('verification')}
+              onOpenReferrals={() => navigateTo('referrals')}
               onSignOut={handleSignOut}
             />
           ) : investor ? (
@@ -505,6 +634,7 @@ export default function App() {
               investor={investor}
               rentals={rentals}
               transactions={transactions}
+              unreadNotifications={unreadNotifications}
               loading={workspaceLoading}
               onRentalUpdated={handleRentalUpdated}
               onBrowseMachines={() => navigateTo('rent')}
@@ -512,13 +642,17 @@ export default function App() {
               onOpenActivity={() => navigateTo('activity')}
               onOpenAccount={() => navigateTo('account')}
               onOpenVerification={() => navigateTo('verification')}
+              onOpenNotifications={() => navigateTo('notifications')}
+              onOpenReferrals={() => navigateTo('referrals')}
               onOpenAdmin={isStaff ? () => navigateTo('admin') : undefined}
               onSignOut={handleSignOut}
             />
           ) : (
             <AuthView
               initialMode="signin"
+              initialReferralCode={initialRefCode}
               masterAdminClaimed={overview?.masterAdminClaimed ?? true}
+              brandName={brandName}
               onBack={() => setScreen('home')}
               onAuthenticated={handleAuthenticated}
             />
@@ -531,7 +665,7 @@ export default function App() {
             aria-label="App navigation"
             className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[406px] z-40"
           >
-            <div className="rounded-2xl bg-white/95 backdrop-blur-md border border-[#E5E7EB] px-2 py-1.5 shadow-md grid grid-cols-5 items-center">
+            <div className="rounded-2xl bg-white/95 dark:bg-[#0F172A]/95 backdrop-blur-md border border-[#E5E7EB] dark:border-[#1E293B] px-2 py-1.5 shadow-md grid grid-cols-5 items-center">
               <button
                 type="button"
                 onClick={() => navigateTo('home')}
@@ -540,15 +674,17 @@ export default function App() {
                 <span
                   className={`px-3 py-1 rounded-lg transition-colors ${
                     screen === 'home'
-                      ? 'bg-[#EFF6FF] text-[#2563EB]'
-                      : 'text-[#6B7280]'
+                      ? 'bg-[#EFF6FF] dark:bg-[#1E3A8A]/50 text-[#2563EB] dark:text-[#60A5FA]'
+                      : 'text-[#6B7280] dark:text-[#94A3B8]'
                   }`}
                 >
                   <Home className="w-4 h-4" />
                 </span>
                 <span
                   className={`text-[10px] font-semibold ${
-                    screen === 'home' ? 'text-[#2563EB]' : 'text-[#6B7280]'
+                    screen === 'home'
+                      ? 'text-[#2563EB] dark:text-[#60A5FA]'
+                      : 'text-[#6B7280] dark:text-[#94A3B8]'
                   }`}
                 >
                   Home
@@ -563,15 +699,17 @@ export default function App() {
                 <span
                   className={`px-3 py-1 rounded-lg transition-colors ${
                     screen === 'rent'
-                      ? 'bg-[#EFF6FF] text-[#2563EB]'
-                      : 'text-[#6B7280]'
+                      ? 'bg-[#EFF6FF] dark:bg-[#1E3A8A]/50 text-[#2563EB] dark:text-[#60A5FA]'
+                      : 'text-[#6B7280] dark:text-[#94A3B8]'
                   }`}
                 >
                   <TrendingUp className="w-4 h-4" />
                 </span>
                 <span
                   className={`text-[10px] font-semibold ${
-                    screen === 'rent' ? 'text-[#2563EB]' : 'text-[#6B7280]'
+                    screen === 'rent'
+                      ? 'text-[#2563EB] dark:text-[#60A5FA]'
+                      : 'text-[#6B7280] dark:text-[#94A3B8]'
                   }`}
                 >
                   Machines
@@ -583,7 +721,7 @@ export default function App() {
                   type="button"
                   onClick={() => setShowQuickSheet(true)}
                   aria-label="Quick actions"
-                  className="w-12 h-12 -mt-5 rounded-2xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-md flex items-center justify-center border-4 border-[#F4F6F9] transition-colors cursor-pointer"
+                  className="w-12 h-12 -mt-5 rounded-2xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-md flex items-center justify-center border-4 border-[#F4F6F9] dark:border-[#0B1120] transition-colors cursor-pointer"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -598,8 +736,8 @@ export default function App() {
                   <span
                     className={`px-3 py-1 rounded-lg transition-colors relative ${
                       screen === 'admin'
-                        ? 'bg-[#EEF2FF] text-[#4338CA]'
-                        : 'text-[#6B7280]'
+                        ? 'bg-[#EEF2FF] dark:bg-indigo-950/70 text-[#4338CA] dark:text-indigo-300'
+                        : 'text-[#6B7280] dark:text-[#94A3B8]'
                     }`}
                   >
                     <Crown className="w-4 h-4" />
@@ -612,7 +750,9 @@ export default function App() {
                   </span>
                   <span
                     className={`text-[10px] font-semibold ${
-                      screen === 'admin' ? 'text-[#4338CA]' : 'text-[#6B7280]'
+                      screen === 'admin'
+                        ? 'text-[#4338CA] dark:text-indigo-300'
+                        : 'text-[#6B7280] dark:text-[#94A3B8]'
                     }`}
                   >
                     Admin
@@ -627,15 +767,17 @@ export default function App() {
                   <span
                     className={`px-3 py-1 rounded-lg transition-colors ${
                       screen === 'news'
-                        ? 'bg-[#EFF6FF] text-[#2563EB]'
-                        : 'text-[#6B7280]'
+                        ? 'bg-[#EFF6FF] dark:bg-[#1E3A8A]/50 text-[#2563EB] dark:text-[#60A5FA]'
+                        : 'text-[#6B7280] dark:text-[#94A3B8]'
                     }`}
                   >
                     <Newspaper className="w-4 h-4" />
                   </span>
                   <span
                     className={`text-[10px] font-semibold ${
-                      screen === 'news' ? 'text-[#2563EB]' : 'text-[#6B7280]'
+                      screen === 'news'
+                        ? 'text-[#2563EB] dark:text-[#60A5FA]'
+                        : 'text-[#6B7280] dark:text-[#94A3B8]'
                     }`}
                   >
                     Updates
@@ -649,17 +791,22 @@ export default function App() {
                 className="flex flex-col items-center justify-center py-1 gap-0.5 cursor-pointer"
               >
                 <span
-                  className={`px-3 py-1 rounded-lg transition-colors ${
+                  className={`px-3 py-1 rounded-lg transition-colors relative ${
                     screen === 'mine' ||
                     screen === 'wallet' ||
                     screen === 'activity' ||
                     screen === 'account' ||
-                    screen === 'verification'
-                      ? 'bg-[#EFF6FF] text-[#2563EB]'
-                      : 'text-[#6B7280]'
+                    screen === 'verification' ||
+                    screen === 'notifications' ||
+                    screen === 'referrals'
+                      ? 'bg-[#EFF6FF] dark:bg-[#1E3A8A]/50 text-[#2563EB] dark:text-[#60A5FA]'
+                      : 'text-[#6B7280] dark:text-[#94A3B8]'
                   }`}
                 >
                   <User className="w-4 h-4" />
+                  {unreadNotifications > 0 && (
+                    <span className="absolute top-0.5 right-1.5 w-2 h-2 rounded-full bg-[#2563EB]" />
+                  )}
                 </span>
                 <span
                   className={`text-[10px] font-semibold ${
@@ -667,9 +814,11 @@ export default function App() {
                     screen === 'wallet' ||
                     screen === 'activity' ||
                     screen === 'account' ||
-                    screen === 'verification'
-                      ? 'text-[#2563EB]'
-                      : 'text-[#6B7280]'
+                    screen === 'verification' ||
+                    screen === 'notifications' ||
+                    screen === 'referrals'
+                      ? 'text-[#2563EB] dark:text-[#60A5FA]'
+                      : 'text-[#6B7280] dark:text-[#94A3B8]'
                   }`}
                 >
                   Portfolio
@@ -682,21 +831,21 @@ export default function App() {
         {/* Center "+" Quick Action Sheet */}
         {showQuickSheet && (
           <div
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end justify-center"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end justify-center"
             role="dialog"
             aria-modal="true"
           >
-            <div className="w-full max-w-[430px] bg-white rounded-t-2xl border-t border-[#E5E7EB] p-5 space-y-3">
-              <div className="w-10 h-1 rounded-full bg-[#D1D5DB] mx-auto" />
+            <div className="w-full max-w-[430px] bg-white dark:bg-[#111827] rounded-t-2xl border-t border-[#E5E7EB] dark:border-[#1E293B] p-5 space-y-3">
+              <div className="w-10 h-1 rounded-full bg-[#D1D5DB] dark:bg-[#334155] mx-auto" />
               <div className="flex items-center justify-between">
-                <h2 className="font-display text-base font-bold text-[#111827]">
+                <h2 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC]">
                   Quick Actions
                 </h2>
                 <button
                   type="button"
                   onClick={() => setShowQuickSheet(false)}
                   aria-label="Close"
-                  className="w-9 h-9 rounded-lg border border-[#E5E7EB] flex items-center justify-center text-[#4B5563] hover:text-[#111827] cursor-pointer"
+                  className="w-9 h-9 rounded-lg border border-[#E5E7EB] dark:border-[#334155] flex items-center justify-center text-[#4B5563] dark:text-[#CBD5E1] hover:text-[#111827] dark:hover:text-white cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -706,16 +855,16 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => navigateTo('rent')}
-                  className="w-full rounded-xl border border-[#E5E7EB] hover:border-[#9CA3AF] p-3.5 flex items-center gap-3 text-left transition-colors cursor-pointer"
+                  className="w-full rounded-xl border border-[#E5E7EB] dark:border-[#1E293B] hover:border-[#9CA3AF] p-3.5 flex items-center gap-3 text-left transition-colors cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-[#111827] text-white flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-[#111827] dark:bg-[#2563EB] text-white flex items-center justify-center shrink-0">
                     <Cpu className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-[#111827]">
+                    <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]">
                       Rent a robotic machine
                     </p>
-                    <p className="text-[11px] text-[#6B7280]">
+                    <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
                       Browse AI fleet units and start earning daily yield
                     </p>
                   </div>
@@ -724,17 +873,35 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => navigateTo('wallet', { walletMode: 'deposit' })}
-                  className="w-full rounded-xl border border-[#E5E7EB] hover:border-[#9CA3AF] p-3.5 flex items-center gap-3 text-left transition-colors cursor-pointer"
+                  className="w-full rounded-xl border border-[#E5E7EB] dark:border-[#1E293B] hover:border-[#9CA3AF] p-3.5 flex items-center gap-3 text-left transition-colors cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-[#EFF6FF] dark:bg-[#1E3A8A]/40 text-[#2563EB] dark:text-[#60A5FA] flex items-center justify-center shrink-0">
                     <ArrowDownLeft className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-[#111827]">
+                    <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]">
                       Submit crypto deposit
                     </p>
-                    <p className="text-[11px] text-[#6B7280]">
-                      Choose Binance coin & network, send & submit TXID for approval
+                    <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
+                      Choose Binance coin & network, send & submit TXID
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('referrals')}
+                  className="w-full rounded-xl border border-[#E5E7EB] dark:border-[#1E293B] hover:border-[#9CA3AF] p-3.5 flex items-center gap-3 text-left transition-colors cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-[#059669] dark:text-[#34D399] flex items-center justify-center shrink-0">
+                    <Gift className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]">
+                      Invite & earn 2x daily yields
+                    </p>
+                    <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
+                      Share invite link for cash rewards + double yields
                     </p>
                   </div>
                 </button>
@@ -742,16 +909,16 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => navigateTo('wallet', { walletMode: 'withdraw' })}
-                  className="w-full rounded-xl border border-[#E5E7EB] hover:border-[#9CA3AF] p-3.5 flex items-center gap-3 text-left transition-colors cursor-pointer"
+                  className="w-full rounded-xl border border-[#E5E7EB] dark:border-[#1E293B] hover:border-[#9CA3AF] p-3.5 flex items-center gap-3 text-left transition-colors cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-[#F3F4F6] text-[#111827] flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-[#F3F4F6] dark:bg-[#1E293B] text-[#111827] dark:text-[#F8FAFC] flex items-center justify-center shrink-0">
                     <ArrowUpRight className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-[#111827]">
+                    <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]">
                       Request crypto withdrawal
                     </p>
-                    <p className="text-[11px] text-[#6B7280]">
+                    <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
                       Verified accounts can request payout to external wallet
                     </p>
                   </div>

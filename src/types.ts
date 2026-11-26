@@ -84,6 +84,13 @@ export interface InvestorProfile {
   totalDeposited: number;
   totalWithdrawn: number;
   totalYieldCollected: number;
+  referralCode: string;
+  referredByUserId?: string;
+  referredByCode?: string;
+  referredByName?: string;
+  referralBonusEarned: number;
+  doubleYieldActiveUntil?: string;
+  hasApprovedDeposit?: boolean;
   createdAt: string;
 }
 
@@ -108,6 +115,8 @@ export interface RobotMachine {
   availableUnits: number;
   totalUnits: number;
   facilityHub: string;
+  referralBonusUsd?: number;
+  doubleYieldEligible?: boolean;
   specs: {
     neuralCore: string;
     autonomyLevel: string;
@@ -129,6 +138,9 @@ export interface MachineRental {
   totalCost: number;
   dailyReturnRate: number;
   dailyPayout: number;
+  yieldMultiplier: number;
+  accruedYieldCarry: number;
+  accrualAnchorAt: string;
   cycleDays: number;
   simulatedDaysElapsed: number;
   collectedYield: number;
@@ -138,6 +150,7 @@ export interface MachineRental {
 }
 
 export interface EnrichedMachineRental extends MachineRental {
+  effectiveDailyPayout: number;
   daysElapsed: number;
   exactDaysElapsed: number;
   remainingDays: number;
@@ -146,7 +159,13 @@ export interface EnrichedMachineRental extends MachineRental {
   progressPercent: number;
 }
 
-export type TransactionType = 'deposit' | 'withdraw' | 'rental' | 'yield_payout';
+export type TransactionType =
+  | 'deposit'
+  | 'withdraw'
+  | 'rental'
+  | 'yield_payout'
+  | 'referral_reward';
+
 export type TransactionStatus = 'pending' | 'completed' | 'rejected';
 
 export interface WalletTransaction {
@@ -177,6 +196,84 @@ export interface FleetDispatch {
   publishedAt: string;
   title: string;
   summary: string;
+  imageUrl?: string;
+}
+
+export interface HowItWorksStep {
+  title: string;
+  body: string;
+}
+
+export interface SiteConfig {
+  brandName: string;
+  brandSubtitle: string;
+  heroKicker: string;
+  heroTitle: string;
+  heroDescription: string;
+  heroImageUrl: string;
+  primaryCtaText: string;
+  secondaryCtaText: string;
+  activeHubsCount: number;
+  announcementBanner: string;
+  referralHeadline: string;
+  referralDescription: string;
+  referralRewardRatePct: number;
+  referralDoubleYieldDays: number;
+  footerNotice: string;
+  howItWorksSteps: HowItWorksStep[];
+}
+
+export type NotificationCategory =
+  | 'transfer'
+  | 'kyc'
+  | 'referral'
+  | 'rental'
+  | 'system'
+  | 'admin';
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  category: NotificationCategory;
+  read: boolean;
+  actionScreen?:
+    | 'wallet'
+    | 'verification'
+    | 'referrals'
+    | 'mine'
+    | 'activity'
+    | 'admin'
+    | 'news'
+    | 'rent';
+  createdAt: string;
+}
+
+export interface TeamMemberSummary {
+  id: string;
+  fullName: string;
+  email: string;
+  avatarUrl?: string;
+  joinedAt: string;
+  kycStatus: KycStatus;
+  hasDeposited: boolean;
+  totalDeposited: number;
+  activeRentalsCount: number;
+  rentedValueUsd: number;
+  rewardGeneratedUsd: number;
+}
+
+export interface ReferralSummary {
+  referralCode: string;
+  rewardRatePct: number;
+  doubleYieldDaysPerInvite: number;
+  doubleYieldActive: boolean;
+  doubleYieldActiveUntil?: string;
+  totalTeamMembers: number;
+  qualifyingDepositors: number;
+  totalReferralEarned: number;
+  teamMembers: TeamMemberSummary[];
 }
 
 export interface AdminOverviewData {
@@ -188,9 +285,15 @@ export interface AdminOverviewData {
     pendingDepositVolume: number;
     pendingWithdrawalVolume: number;
     activeRentalsCount: number;
+    totalRentalsCount: number;
+    totalReferralPayouts: number;
   };
   users: InvestorProfile[];
   pendingTransactions: WalletTransaction[];
-  recentReviewedTransactions: WalletTransaction[];
+  allTransactions: WalletTransaction[];
+  rentals: EnrichedMachineRental[];
   robots: RobotMachine[];
+  dispatches: FleetDispatch[];
+  cryptoCoins: BinanceCoinConfig[];
+  siteConfig: SiteConfig;
 }

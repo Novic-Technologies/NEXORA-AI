@@ -1,6 +1,8 @@
 import type {
   AccountStatus,
   AdminOverviewData,
+  AppNotification,
+  BinanceCoinConfig,
   BinanceCoinSymbol,
   BinanceNetworkCode,
   EnrichedMachineRental,
@@ -8,7 +10,11 @@ import type {
   IdentityDocType,
   InvestorClassification,
   InvestorProfile,
+  KycStatus,
+  ReferralSummary,
+  RobotCategory,
   RobotMachine,
+  SiteConfig,
   UserRole,
   WalletTransaction,
 } from '../types.ts';
@@ -48,6 +54,7 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export interface OverviewResponse {
   masterAdminClaimed: boolean;
+  siteConfig: SiteConfig;
   stats: {
     totalFleetUnits: number;
     availableFleetUnits: number;
@@ -58,6 +65,7 @@ export interface OverviewResponse {
   };
   featuredRobots: RobotMachine[];
   dispatches: FleetDispatch[];
+  cryptoCoins: BinanceCoinConfig[];
 }
 
 export function fetchOverview(): Promise<OverviewResponse> {
@@ -92,6 +100,7 @@ export async function registerInvestor(payload: {
   country: string;
   city?: string;
   avatarUrl?: string;
+  referralCode?: string;
   investorType: InvestorClassification;
 }): Promise<{ token: string; investor: InvestorProfile }> {
   const res = await apiRequest<{ token: string; investor: InvestorProfile }>(
@@ -180,6 +189,27 @@ export function fetchRobots(): Promise<{ robots: RobotMachine[] }> {
   return apiRequest<{ robots: RobotMachine[] }>('/api/robots');
 }
 
+export function fetchReferrals(): Promise<ReferralSummary> {
+  return apiRequest<ReferralSummary>('/api/referrals');
+}
+
+export function fetchNotifications(): Promise<{
+  notifications: AppNotification[];
+  unreadCount: number;
+}> {
+  return apiRequest('/api/notifications');
+}
+
+export function markNotificationRead(id: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/api/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+  });
+}
+
+export function markAllNotificationsRead(): Promise<{ ok: boolean }> {
+  return apiRequest('/api/notifications/read-all', { method: 'POST' });
+}
+
 export function submitCryptoDeposit(payload: {
   coinSymbol: BinanceCoinSymbol;
   networkCode: BinanceNetworkCode;
@@ -245,7 +275,7 @@ export function fetchTransactions(): Promise<{ transactions: WalletTransaction[]
   return apiRequest<{ transactions: WalletTransaction[] }>('/api/transactions');
 }
 
-// Master Admin / Staff endpoints
+// Master Admin / Staff Full CRUD endpoints
 export function fetchAdminOverview(): Promise<AdminOverviewData> {
   return apiRequest<AdminOverviewData>('/api/admin/overview');
 }
@@ -270,6 +300,52 @@ export function reviewUserKyc(
   });
 }
 
+export function createAdminUser(payload: {
+  fullName: string;
+  email: string;
+  password: string;
+  phone?: string;
+  country?: string;
+  companyName?: string;
+  role: UserRole;
+  walletBalance?: number;
+  kycStatus?: KycStatus;
+}): Promise<{ user: InvestorProfile }> {
+  return apiRequest('/api/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminUser(
+  userId: string,
+  payload: Partial<{
+    fullName: string;
+    phone: string;
+    companyName: string;
+    country: string;
+    city: string;
+    investorType: InvestorClassification;
+    walletBalance: number;
+    heldBalance: number;
+    kycStatus: KycStatus;
+    role: UserRole;
+    accountStatus: AccountStatus;
+    doubleYieldDays: number;
+  }>
+): Promise<{ user: InvestorProfile }> {
+  return apiRequest(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminUser(userId: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export function updateUserRole(
   userId: string,
   payload: { role?: UserRole; accountStatus?: AccountStatus }
@@ -280,12 +356,123 @@ export function updateUserRole(
   });
 }
 
+export function updateSiteConfig(
+  payload: Partial<SiteConfig>
+): Promise<{ siteConfig: SiteConfig }> {
+  return apiRequest('/api/admin/site-config', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCryptoNetwork(payload: {
+  symbol: BinanceCoinSymbol;
+  networkCode: BinanceNetworkCode;
+  depositAddress?: string;
+  memo?: string;
+  minDepositUsd?: number;
+  minWithdrawUsd?: number;
+  withdrawFeeUsd?: number;
+}): Promise<{ cryptoCoins: BinanceCoinConfig[] }> {
+  return apiRequest('/api/admin/crypto-coins', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createAdminRobot(payload: {
+  name: string;
+  modelCode: string;
+  category: RobotCategory;
+  tagline: string;
+  description: string;
+  facilityHub: string;
+  rentalPrice: number;
+  dailyReturnRate: number;
+  cycleDays: number;
+  totalUnits: number;
+  availableUnits: number;
+  referralBonusUsd?: number;
+  imageUrl?: string;
+}): Promise<{ robot: RobotMachine }> {
+  return apiRequest('/api/admin/robots', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminRobot(
+  robotId: string,
+  payload: Partial<RobotMachine>
+): Promise<{ robot: RobotMachine }> {
+  return apiRequest(`/api/admin/robots/${encodeURIComponent(robotId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminRobot(robotId: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/api/admin/robots/${encodeURIComponent(robotId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export function publishFleetDispatch(payload: {
   category: string;
   title: string;
   summary: string;
+  imageUrl?: string;
 }): Promise<{ dispatch: FleetDispatch }> {
   return apiRequest('/api/admin/dispatches', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminDispatch(
+  id: string,
+  payload: Partial<FleetDispatch>
+): Promise<{ dispatch: FleetDispatch }> {
+  return apiRequest(`/api/admin/dispatches/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminDispatch(id: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/api/admin/dispatches/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function updateAdminRental(
+  rentalId: string,
+  payload: { yieldMultiplier?: number; status?: 'active' | 'completed'; simulatedDaysAdd?: number }
+): Promise<{ rental: EnrichedMachineRental }> {
+  return apiRequest(`/api/admin/rentals/${encodeURIComponent(rentalId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminRental(rentalId: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/api/admin/rentals/${encodeURIComponent(rentalId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function deleteAdminTransaction(txId: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/api/admin/transactions/${encodeURIComponent(txId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function sendAdminNotification(payload: {
+  userId: string;
+  title: string;
+  message: string;
+}): Promise<{ sentCount: number }> {
+  return apiRequest('/api/admin/notifications', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

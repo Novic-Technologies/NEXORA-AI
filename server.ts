@@ -6,33 +6,39 @@ import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import { WebSocket, WebSocketServer } from 'ws';
-import {
-  getBinanceNetwork,
-  BINANCE_COINS,
-  validateNetworkAddress,
-} from './src/lib/cryptoCoins.ts';
+import { validateNetworkAddress } from './src/lib/cryptoCoins.ts';
 import type {
   AccountStatus,
+  AppNotification,
+  BinanceCoinConfig,
   BinanceCoinSymbol,
   BinanceNetworkCode,
   FleetDispatch,
   IdentityDocType,
   InvestorClassification,
+  KycStatus,
   MachineRental,
+  RobotCategory,
+  RobotMachine,
+  TeamMemberSummary,
   UserRole,
   WalletTransaction,
 } from './src/types.ts';
 import {
+  createNotificationRecord,
   DEMO_INVESTOR_EMAIL,
   enrichRental,
+  generateReferralCode,
   hasMasterAdmin,
   hashPassword,
+  isDoubleYieldActive,
   loadDatabase,
   sanitizeInvestor,
   saveDatabase,
+  syncRentalMultiplier,
   verifyPassword,
 } from './server/store.ts';
-import type { StoredInvestor } from './server/store.ts';
+import type { DatabaseState, StoredInvestor } from './server/store.ts';
 
 dotenv.config();
 
@@ -64,7 +70,16 @@ const VALID_DOC_TYPES: IdentityDocType[] = [
   'Driver License',
 ];
 
+const VALID_ROBOT_CATEGORIES: RobotCategory[] = [
+  'Warehouse & Logistics',
+  'Humanoid AI',
+  'Precision Assembly',
+  'Autonomous Inspection',
+  'Service & Agri',
+];
+
 const ASSIGNABLE_ROLES: UserRole[] = ['investor', 'moderator', 'admin'];
+const VALID_KYC_STATUSES: KycStatus[] = ['unverified', 'pending', 'verified', 'rejected'];
 
 function signSessionToken(investorId: string): string {
   const payload = Buffer.from(
@@ -173,7 +188,7 @@ function validateSafeImageRef(value: unknown, maxBytes = 1_800_000): string | un
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  if (/^\/src\/assets\/images\/[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/i.test(trimmed)) {
+  if (/^\/(src\/assets\/images|assets\/aistudio)\/[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/i.test(trimmed)) {
     return trimmed;
   }
   if (/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
@@ -182,6 +197,15 @@ function validateSafeImageRef(value: unknown, maxBytes = 1_800_000): string | un
     }
   }
   return undefined;
+}
+
+function getCoinNetworkFromDb(
+  db: DatabaseState,
+  coinSymbol: BinanceCoinSymbol,
+  networkCode: BinanceNetworkCode
+) {
+  const coin = db.cryptoCoins.find((c) => c.symbol === coinSymbol);
+  return coin?.networks.find((n) => n.networkCode === networkCode);
 }
 
 function syncEnvMasterAdmin(): void {
@@ -200,6 +224,7 @@ function syncEnvMasterAdmin(): void {
     existing.passwordSalt = salt;
     saveDatabase(db);
   } else {
+    const usedCodes = new Set(db.investors.map((i) => i.referralCode));
     db.investors.unshift({
       id: `inv_master_${crypto.randomUUID().slice(0, 8)}`,
       role: 'master_admin',
@@ -217,6 +242,9 @@ function syncEnvMasterAdmin(): void {
       totalDeposited: 25000,
       totalWithdrawn: 0,
       totalYieldCollected: 0,
+      referralCode: generateReferralCode('Nexora Master', usedCodes),
+      referralBonusEarned: 0,
+      hasApprovedDeposit: true,
       createdAt: new Date().toISOString(),
       passwordHash: hash,
       passwordSalt: salt,
@@ -294,12 +322,53 @@ function requireMasterAdmin(
   next();
 }
 
+function buildReferralSummary(db: DatabaseState, investor: StoredInvestor) {
+  const team = db.investors.filter((u) => u.referredByUserId === investor.id);
+  const teamMembers: TeamMemberSummary[] = team.map((member) => {
+    const memberRentals = db.rentals.filter((r) => r.investorId === member.id);
+    const activeCount = memberRentals
+      .filter((r) => r.status === 'active')
+      .reduce((s, r) => s + r.quantity, 0);
+    const rentedValueUsd = Number(
+      memberRentals.reduce((s, r) => s + r.totalCost, 0).toFixed(2)
+    );
+    const rewardGeneratedUsd = Number(
+      ((member.totalDeposited * db.siteConfig.referralRewardRatePct) / 100).toFixed(2)
+    );
+    return {
+      id: member.id,
+      fullName: member.fullName,
+      email: member.email,
+      avatarUrl: member.avatarUrl,
+      joinedAt: member.createdAt,
+      kycStatus: member.kycStatus,
+      hasDeposited: Boolean(member.hasApprovedDeposit || member.totalDeposited > 0),
+      totalDeposited: Number(member.totalDeposited.toFixed(2)),
+      activeRentalsCount: activeCount,
+      rentedValueUsd,
+      rewardGeneratedUsd,
+    };
+  });
+
+  return {
+    referralCode: investor.referralCode,
+    rewardRatePct: db.siteConfig.referralRewardRatePct,
+    doubleYieldDaysPerInvite: db.siteConfig.referralDoubleYieldDays,
+    doubleYieldActive: isDoubleYieldActive(investor),
+    doubleYieldActiveUntil: investor.doubleYieldActiveUntil,
+    totalTeamMembers: teamMembers.length,
+    qualifyingDepositors: teamMembers.filter((m) => m.hasDeposited).length,
+    totalReferralEarned: Number((investor.referralBonusEarned ?? 0).toFixed(2)),
+    teamMembers,
+  };
+}
+
 async function startServer() {
   syncEnvMasterAdmin();
 
   const app = express();
   app.set('trust proxy', true);
-  app.use(express.json({ limit: '5mb' }));
+  app.use(express.json({ limit: '6mb' }));
 
   const server = http.createServer(app);
   const wss = new WebSocketServer({ noServer: true });
@@ -366,6 +435,25 @@ async function startServer() {
     }
   }
 
+  function notifyUser(
+    db: DatabaseState,
+    params: {
+      userId: string;
+      title: string;
+      message: string;
+      category: AppNotification['category'];
+      actionScreen?: AppNotification['actionScreen'];
+    }
+  ): AppNotification {
+    const notif = createNotificationRecord(db, params);
+    sendToUser(params.userId, {
+      type: 'notification:new',
+      notificationItem: notif,
+      notification: params.title,
+    });
+    return notif;
+  }
+
   function broadcastToStaff(event: Record<string, unknown>): void {
     const payload = JSON.stringify(event);
     for (const c of clients) {
@@ -391,6 +479,21 @@ async function startServer() {
   setInterval(() => {
     if (clients.size === 0) return;
     const db = loadDatabase();
+    let changed = false;
+    for (const inv of db.investors) {
+      const shouldBe2x = isDoubleYieldActive(inv);
+      const userRentals = db.rentals.filter((r) => r.investorId === inv.id && r.status === 'active');
+      for (const r of userRentals) {
+        if (!shouldBe2x && r.yieldMultiplier === 2) {
+          syncRentalMultiplier(r, 1);
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      saveDatabase(db);
+    }
+
     for (const c of clients) {
       if (c.ws.readyState !== WebSocket.OPEN || !c.userId) continue;
       const userRentals = db.rentals
@@ -412,21 +515,23 @@ async function startServer() {
     const db = loadDatabase();
     const totalUnits = db.robots.reduce((sum, r) => sum + r.totalUnits, 0);
     const availableUnits = db.robots.reduce((sum, r) => sum + r.availableUnits, 0);
-    const minRate = Math.min(...db.robots.map((r) => r.dailyReturnRate));
-    const maxRate = Math.max(...db.robots.map((r) => r.dailyReturnRate));
+    const minRate = db.robots.length ? Math.min(...db.robots.map((r) => r.dailyReturnRate)) : 0;
+    const maxRate = db.robots.length ? Math.max(...db.robots.map((r) => r.dailyReturnRate)) : 0;
 
     res.json({
       masterAdminClaimed: hasMasterAdmin(db),
+      siteConfig: db.siteConfig,
       stats: {
         totalFleetUnits: totalUnits,
         availableFleetUnits: availableUnits,
-        activeHubs: 6,
+        activeHubs: db.siteConfig.activeHubsCount,
         dailyRateRange: `${minRate.toFixed(2)}%–${maxRate.toFixed(2)}%`,
-        supportedCoins: BINANCE_COINS.length,
+        supportedCoins: db.cryptoCoins.length,
         verifiedInvestors: db.investors.filter((i) => i.kycStatus === 'verified').length,
       },
-      featuredRobots: db.robots.slice(0, 3),
+      featuredRobots: db.robots.slice(0, 4),
       dispatches: db.dispatches,
+      cryptoCoins: db.cryptoCoins,
     });
   });
 
@@ -463,6 +568,7 @@ async function startServer() {
       return;
     }
 
+    const usedCodes = new Set(db.investors.map((i) => i.referralCode));
     const { hash, salt } = hashPassword(password);
     const masterAdmin: StoredInvestor = {
       id: `inv_master_${crypto.randomUUID().slice(0, 8)}`,
@@ -482,12 +588,23 @@ async function startServer() {
       totalDeposited: 25000,
       totalWithdrawn: 0,
       totalYieldCollected: 0,
+      referralCode: generateReferralCode(fullName, usedCodes),
+      referralBonusEarned: 0,
+      hasApprovedDeposit: true,
       createdAt: new Date().toISOString(),
       passwordHash: hash,
       passwordSalt: salt,
     };
 
     db.investors.unshift(masterAdmin);
+    createNotificationRecord(db, {
+      userId: masterAdmin.id,
+      title: 'Master Admin Console Activated',
+      message:
+        'You now have full control over all accounts, roles, crypto approvals, site content, machines, and fleet dispatches.',
+      category: 'admin',
+      actionScreen: 'admin',
+    });
     saveDatabase(db);
 
     const token = signSessionToken(masterAdmin.id);
@@ -508,6 +625,8 @@ async function startServer() {
     const country = typeof body.country === 'string' ? body.country.trim() : '';
     const city = typeof body.city === 'string' ? body.city.trim() : '';
     const avatarUrl = validateSafeImageRef(body.avatarUrl);
+    const referralCodeInput =
+      typeof body.referralCode === 'string' ? body.referralCode.trim().toUpperCase() : '';
     const investorTypeRaw =
       typeof body.investorType === 'string' ? body.investorType.trim() : 'Individual Investor';
 
@@ -544,6 +663,18 @@ async function startServer() {
       return;
     }
 
+    let referrer: StoredInvestor | undefined;
+    if (referralCodeInput) {
+      referrer = db.investors.find(
+        (inv) => inv.referralCode.toUpperCase() === referralCodeInput
+      );
+      if (!referrer) {
+        res.status(400).json({ error: 'The referral invite code entered was not found.' });
+        return;
+      }
+    }
+
+    const usedCodes = new Set(db.investors.map((i) => i.referralCode));
     const { hash, salt } = hashPassword(password);
     const newInvestor: StoredInvestor = {
       id: `inv_${crypto.randomUUID().slice(0, 12)}`,
@@ -563,12 +694,38 @@ async function startServer() {
       totalDeposited: 0,
       totalWithdrawn: 0,
       totalYieldCollected: 0,
+      referralCode: generateReferralCode(fullName, usedCodes),
+      referredByUserId: referrer?.id,
+      referredByCode: referrer?.referralCode,
+      referredByName: referrer?.fullName,
+      referralBonusEarned: 0,
+      hasApprovedDeposit: false,
       createdAt: new Date().toISOString(),
       passwordHash: hash,
       passwordSalt: salt,
     };
 
     db.investors.push(newInvestor);
+
+    createNotificationRecord(db, {
+      userId: newInvestor.id,
+      title: `Welcome to ${db.siteConfig.brandName}`,
+      message:
+        'Complete your photo & ID verification, make a crypto deposit, and invite partners with your referral code to earn 2x daily yields.',
+      category: 'system',
+      actionScreen: 'verification',
+    });
+
+    if (referrer) {
+      notifyUser(db, {
+        userId: referrer.id,
+        title: 'New Team Member Joined',
+        message: `${fullName} registered using your invite code (${referrer.referralCode}). When their first deposit is approved, you earn ${db.siteConfig.referralRewardRatePct}% + 2x daily yields!`,
+        category: 'referral',
+        actionScreen: 'referrals',
+      });
+    }
+
     saveDatabase(db);
     broadcastToStaff({ type: 'admin:queue_updated' });
 
@@ -760,10 +917,21 @@ async function startServer() {
         submittedAt: new Date().toISOString(),
       };
 
+      notifyUser(db, {
+        userId: target.id,
+        title: 'KYC Verification Submitted',
+        message: 'Your identity records have been queued for Master Admin review.',
+        category: 'kyc',
+        actionScreen: 'verification',
+      });
+
       saveDatabase(db);
       const sanitized = sanitizeInvestor(target);
       sendToUser(target.id, { type: 'investor:updated', investor: sanitized });
-      broadcastToStaff({ type: 'admin:queue_updated', notification: `${target.fullName} submitted KYC verification` });
+      broadcastToStaff({
+        type: 'admin:queue_updated',
+        notification: `${target.fullName} submitted KYC verification`,
+      });
 
       res.json({ investor: sanitized });
     }
@@ -773,6 +941,60 @@ async function startServer() {
     const db = loadDatabase();
     res.json({ robots: db.robots });
   });
+
+  // Referral & Team summary for authenticated user
+  app.get('/api/referrals', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+    const db = loadDatabase();
+    const current = db.investors.find((i) => i.id === req.investor!.id);
+    if (!current) {
+      res.status(404).json({ error: 'Account not found.' });
+      return;
+    }
+    res.json(buildReferralSummary(db, current));
+  });
+
+  // Persistent Notifications Inbox
+  app.get('/api/notifications', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+    const db = loadDatabase();
+    const list = db.notifications
+      .filter((n) => n.userId === req.investor!.id)
+      .slice(0, 100);
+    res.json({
+      notifications: list,
+      unreadCount: list.filter((n) => !n.read).length,
+    });
+  });
+
+  app.post(
+    '/api/notifications/:id/read',
+    requireAuth,
+    (req: AuthenticatedRequest, res: Response) => {
+      const db = loadDatabase();
+      const target = db.notifications.find(
+        (n) => n.id === req.params.id && n.userId === req.investor!.id
+      );
+      if (target) {
+        target.read = true;
+        saveDatabase(db);
+      }
+      res.json({ ok: true });
+    }
+  );
+
+  app.post(
+    '/api/notifications/read-all',
+    requireAuth,
+    (req: AuthenticatedRequest, res: Response) => {
+      const db = loadDatabase();
+      for (const n of db.notifications) {
+        if (n.userId === req.investor!.id) {
+          n.read = true;
+        }
+      }
+      saveDatabase(db);
+      res.json({ ok: true });
+    }
+  );
 
   // Binance multi-network crypto deposit — ALWAYS enters PENDING for Master Admin approval
   app.post('/api/wallet/deposit', requireAuth, (req: AuthenticatedRequest, res: Response) => {
@@ -787,7 +1009,8 @@ async function startServer() {
     const txHash = typeof body.txHash === 'string' ? body.txHash.trim() : '';
     const receiptImageUrl = validateSafeImageRef(body.receiptImageUrl);
 
-    const net = getBinanceNetwork(coinSymbol, networkCode);
+    const db = loadDatabase();
+    const net = getCoinNetworkFromDb(db, coinSymbol, networkCode);
     if (!net) {
       res.status(400).json({ error: 'Select a supported Binance coin and network.' });
       return;
@@ -805,7 +1028,6 @@ async function startServer() {
       return;
     }
 
-    const db = loadDatabase();
     const investor = db.investors.find((inv) => inv.id === req.investor!.id);
     if (!investor) {
       res.status(404).json({ error: 'Account not found.' });
@@ -833,6 +1055,14 @@ async function startServer() {
     };
 
     db.transactions.unshift(tx);
+    notifyUser(db, {
+      userId: investor.id,
+      title: `$${cleanAmount.toLocaleString()} ${coinSymbol} Deposit Queued`,
+      message:
+        'Your transfer proof is waiting for Master Admin verification. Your balance will update as soon as it is approved.',
+      category: 'transfer',
+      actionScreen: 'activity',
+    });
     saveDatabase(db);
 
     sendToUser(investor.id, { type: 'transaction:created', transaction: tx });
@@ -861,13 +1091,13 @@ async function startServer() {
       typeof body.walletAddress === 'string' ? body.walletAddress.trim() : '';
     const memo = typeof body.memo === 'string' ? body.memo.trim() : '';
 
-    const net = getBinanceNetwork(coinSymbol, networkCode);
+    const db = loadDatabase();
+    const net = getCoinNetworkFromDb(db, coinSymbol, networkCode);
     if (!net) {
       res.status(400).json({ error: 'Select a supported Binance coin and network.' });
       return;
     }
 
-    const db = loadDatabase();
     const investor = db.investors.find((inv) => inv.id === req.investor!.id);
     if (!investor) {
       res.status(404).json({ error: 'Account not found.' });
@@ -935,6 +1165,13 @@ async function startServer() {
     };
 
     db.transactions.unshift(tx);
+    notifyUser(db, {
+      userId: investor.id,
+      title: `$${cleanAmount.toLocaleString()} ${coinSymbol} Withdrawal Held in Escrow`,
+      message: 'Your payout request is queued for Master Admin settlement approval.',
+      category: 'transfer',
+      actionScreen: 'activity',
+    });
     saveDatabase(db);
 
     const sanitized = sanitizeInvestor(investor);
@@ -992,6 +1229,9 @@ async function startServer() {
     }
 
     const dailyPayout = Number(((totalCost * robot.dailyReturnRate) / 100).toFixed(2));
+    const multiplier = isDoubleYieldActive(investor) && robot.doubleYieldEligible !== false ? 2 : 1;
+    const nowIso = new Date().toISOString();
+
     investor.walletBalance = Number((investor.walletBalance - totalCost).toFixed(2));
     robot.availableUnits -= quantity;
 
@@ -1008,11 +1248,14 @@ async function startServer() {
       totalCost,
       dailyReturnRate: robot.dailyReturnRate,
       dailyPayout,
+      yieldMultiplier: multiplier,
+      accruedYieldCarry: 0,
+      accrualAnchorAt: nowIso,
       cycleDays: robot.cycleDays,
       simulatedDaysElapsed: 0,
       collectedYield: 0,
       status: 'active',
-      rentedAt: new Date().toISOString(),
+      rentedAt: nowIso,
       lastClaimedAt: null,
     };
 
@@ -1024,12 +1267,19 @@ async function startServer() {
       type: 'rental',
       amount: totalCost,
       status: 'completed',
-      reference: `Rented ${quantity}x ${robot.name} (${robot.cycleDays}d cycle)`,
-      createdAt: new Date().toISOString(),
+      reference: `Rented ${quantity}x ${robot.name} (${robot.cycleDays}d cycle${multiplier === 2 ? ' · 2x Yield' : ''})`,
+      createdAt: nowIso,
     };
 
     db.rentals.unshift(rental);
     db.transactions.unshift(tx);
+    notifyUser(db, {
+      userId: investor.id,
+      title: `Machine Activated: ${quantity}x ${robot.name}`,
+      message: `Earning $${(dailyPayout * multiplier).toFixed(2)}/day across a ${robot.cycleDays}-day operating cycle${multiplier === 2 ? ' with your 2x Referral Boost' : ''}.`,
+      category: 'rental',
+      actionScreen: 'mine',
+    });
     saveDatabase(db);
 
     broadcastAll({ type: 'fleet:updated', robots: db.robots });
@@ -1089,11 +1339,18 @@ async function startServer() {
       type: 'yield_payout',
       amount: claimable,
       status: 'completed',
-      reference: `Live yield payout · ${rental.robotName}`,
+      reference: `Live yield payout · ${rental.robotName}${rental.yieldMultiplier === 2 ? ' (2x Boost)' : ''}`,
       createdAt: new Date().toISOString(),
     };
 
     db.transactions.unshift(tx);
+    notifyUser(db, {
+      userId: investor.id,
+      title: `Collected $${claimable.toFixed(2)} Yield`,
+      message: `${rental.robotName} yield payout was credited to your wallet balance.`,
+      category: 'rental',
+      actionScreen: 'mine',
+    });
     saveDatabase(db);
 
     res.json({
@@ -1110,7 +1367,7 @@ async function startServer() {
   });
 
   // ============================================================================
-  // MASTER ADMIN & STAFF OPERATIONS API
+  // MASTER ADMIN & STAFF FULL CRUD OPERATIONS API
   // ============================================================================
 
   app.get(
@@ -1120,10 +1377,6 @@ async function startServer() {
     (_req: AuthenticatedRequest, res: Response) => {
       const db = loadDatabase();
       const pendingTransactions = db.transactions.filter((t) => t.status === 'pending');
-      const recentReviewedTransactions = db.transactions
-        .filter((t) => (t.type === 'deposit' || t.type === 'withdraw') && t.status !== 'pending')
-        .slice(0, 20);
-
       const pendingDeposits = pendingTransactions.filter((t) => t.type === 'deposit');
       const pendingWithdrawals = pendingTransactions.filter((t) => t.type === 'withdraw');
 
@@ -1140,16 +1393,27 @@ async function startServer() {
             pendingWithdrawals.reduce((s, t) => s + t.amount, 0).toFixed(2)
           ),
           activeRentalsCount: db.rentals.filter((r) => r.status === 'active').length,
+          totalRentalsCount: db.rentals.length,
+          totalReferralPayouts: Number(
+            db.transactions
+              .filter((t) => t.type === 'referral_reward' && t.status === 'completed')
+              .reduce((s, t) => s + t.amount, 0)
+              .toFixed(2)
+          ),
         },
         users: db.investors.map(sanitizeInvestor),
         pendingTransactions,
-        recentReviewedTransactions,
+        allTransactions: db.transactions.slice(0, 120),
+        rentals: db.rentals.map(enrichRental),
         robots: db.robots,
+        dispatches: db.dispatches,
+        cryptoCoins: db.cryptoCoins,
+        siteConfig: db.siteConfig,
       });
     }
   );
 
-  // Approve or Reject Deposit / Withdrawal
+  // Approve or Reject Deposit / Withdrawal (+ automatic Referral Rewards & 2x Yield Activation on approved deposit)
   app.post(
     '/api/admin/transactions/:id/review',
     requireAuth,
@@ -1191,14 +1455,89 @@ async function startServer() {
       })`;
       const now = new Date().toISOString();
 
+      let referrerUpdated: StoredInvestor | undefined;
+      let referralTx: WalletTransaction | undefined;
+
       if (tx.type === 'deposit') {
         if (action === 'approve') {
           tx.status = 'completed';
           investor.walletBalance = Number((investor.walletBalance + tx.amount).toFixed(2));
           investor.totalDeposited = Number((investor.totalDeposited + tx.amount).toFixed(2));
+          investor.hasApprovedDeposit = true;
           if (txHashOverride) tx.txHash = txHashOverride;
+
+          notifyUser(db, {
+            userId: investor.id,
+            title: `$${tx.amount.toLocaleString()} ${tx.coinSymbol || 'Crypto'} Deposit Approved`,
+            message: 'Funds are now available in your wallet to rent AI robotic machines.',
+            category: 'transfer',
+            actionScreen: 'mine',
+          });
+
+          // Referral reward payout when invitee successfully deposits!
+          if (investor.referredByUserId) {
+            const referrer = db.investors.find((u) => u.id === investor.referredByUserId);
+            if (referrer) {
+              const rate = db.siteConfig.referralRewardRatePct || 5.5;
+              const commissionUsd = Number(((tx.amount * rate) / 100).toFixed(2));
+              const boostDays = Math.max(1, db.siteConfig.referralDoubleYieldDays || 7);
+
+              if (commissionUsd > 0) {
+                referrer.walletBalance = Number(
+                  (referrer.walletBalance + commissionUsd).toFixed(2)
+                );
+                referrer.referralBonusEarned = Number(
+                  ((referrer.referralBonusEarned ?? 0) + commissionUsd).toFixed(2)
+                );
+
+                const currentBoostMs = referrer.doubleYieldActiveUntil
+                  ? Math.max(Date.now(), new Date(referrer.doubleYieldActiveUntil).getTime())
+                  : Date.now();
+                referrer.doubleYieldActiveUntil = new Date(
+                  currentBoostMs + boostDays * 24 * 60 * 60 * 1000
+                ).toISOString();
+
+                // Activate 2x daily yield across referrer's active rentals immediately
+                for (const r of db.rentals) {
+                  if (r.investorId === referrer.id && r.status === 'active' && r.yieldMultiplier < 2) {
+                    syncRentalMultiplier(r, 2);
+                  }
+                }
+
+                referralTx = {
+                  id: `tx_${crypto.randomUUID().slice(0, 12)}`,
+                  investorId: referrer.id,
+                  investorName: referrer.fullName,
+                  investorEmail: referrer.email,
+                  type: 'referral_reward',
+                  amount: commissionUsd,
+                  status: 'completed',
+                  reference: `Invite Reward (${rate}%) · ${investor.fullName} $${tx.amount.toLocaleString()} deposit + 2x Yield`,
+                  createdAt: now,
+                };
+                db.transactions.unshift(referralTx);
+
+                notifyUser(db, {
+                  userId: referrer.id,
+                  title: `+$${commissionUsd.toFixed(2)} Invite Reward & 2x Daily Yield!`,
+                  message: `Team member ${investor.fullName} completed a $${tx.amount.toLocaleString()} deposit. You earned $${commissionUsd.toFixed(2)} and unlocked ${boostDays} days of 2x daily yields on your active robots.`,
+                  category: 'referral',
+                  actionScreen: 'referrals',
+                });
+
+                referrerUpdated = referrer;
+              }
+            }
+          }
         } else {
           tx.status = 'rejected';
+          notifyUser(db, {
+            userId: investor.id,
+            title: `$${tx.amount.toLocaleString()} Deposit Declined`,
+            message: adminNote || 'Transfer could not be matched. Please verify TXID and resubmit.',
+            category: 'transfer',
+            actionScreen: 'wallet',
+          });
         }
       } else if (tx.type === 'withdraw') {
         const held = investor.heldBalance ?? 0;
@@ -1208,9 +1547,23 @@ async function startServer() {
           investor.totalWithdrawn = Number((investor.totalWithdrawn + tx.amount).toFixed(2));
           tx.txHash =
             txHashOverride || tx.txHash || `0x${crypto.randomBytes(16).toString('hex')}`;
+          notifyUser(db, {
+            userId: investor.id,
+            title: `$${tx.amount.toLocaleString()} ${tx.coinSymbol || 'Crypto'} Payout Sent`,
+            message: `Sent to ${tx.walletAddress || 'your destination wallet'}. TXID: ${tx.txHash}`,
+            category: 'transfer',
+            actionScreen: 'activity',
+          });
         } else {
           tx.status = 'rejected';
           investor.walletBalance = Number((investor.walletBalance + tx.amount).toFixed(2));
+          notifyUser(db, {
+            userId: investor.id,
+            title: `Withdrawal Declined & Refunded`,
+            message: `$${tx.amount.toLocaleString()} was returned to your available wallet balance.${adminNote ? ` Reason: ${adminNote}` : ''}`,
+            category: 'transfer',
+            actionScreen: 'wallet',
+          });
         }
       }
 
@@ -1232,8 +1585,17 @@ async function startServer() {
             ? `Your $${tx.amount.toLocaleString()} ${tx.type} was approved.`
             : `Your $${tx.amount.toLocaleString()} ${tx.type} was rejected${adminNote ? `: ${adminNote}` : '.'}`,
       });
-      broadcastToStaff({ type: 'admin:queue_updated' });
 
+      if (referrerUpdated) {
+        sendToUser(referrerUpdated.id, {
+          type: 'investor:updated',
+          investor: sanitizeInvestor(referrerUpdated),
+          transaction: referralTx,
+        });
+        sendToUser(referrerUpdated.id, { type: 'rentals:refresh' });
+      }
+
+      broadcastToStaff({ type: 'admin:queue_updated' });
       res.json({ transaction: tx, investor: sanitized });
     }
   );
@@ -1267,6 +1629,17 @@ async function startServer() {
         target.verification.reviewNote = reviewNote || undefined;
       }
 
+      notifyUser(db, {
+        userId: target.id,
+        title: action === 'approve' ? 'Identity Verified' : 'Verification Needs Update',
+        message:
+          action === 'approve'
+            ? 'Your KYC documents were approved. Crypto withdrawals are now unlocked.'
+            : reviewNote || 'Please upload clearer identity photos and resubmit.',
+        category: 'kyc',
+        actionScreen: 'verification',
+      });
+
       saveDatabase(db);
       const sanitized = sanitizeInvestor(target);
       sendToUser(target.id, {
@@ -1280,6 +1653,220 @@ async function startServer() {
       broadcastToStaff({ type: 'admin:queue_updated' });
 
       res.json({ user: sanitized });
+    }
+  );
+
+  // Master Admin ONLY: Create a new user account directly
+  app.post(
+    '/api/admin/users',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : '';
+      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const password = typeof body.password === 'string' ? body.password : '';
+      const phone = typeof body.phone === 'string' ? body.phone.trim() : '+1 000 000 0000';
+      const country = typeof body.country === 'string' ? body.country.trim() : 'Global';
+      const companyName =
+        typeof body.companyName === 'string' ? body.companyName.trim() : 'Personal Portfolio';
+      const role = typeof body.role === 'string' ? (body.role.trim() as UserRole) : 'investor';
+      const walletBalance = Math.max(0, Number(body.walletBalance ?? 0) || 0);
+      const kycStatus = VALID_KYC_STATUSES.includes(body.kycStatus as KycStatus)
+        ? (body.kycStatus as KycStatus)
+        : 'unverified';
+
+      if (fullName.length < 2 || !isValidEmail(email) || password.length < 6) {
+        res.status(400).json({ error: 'Provide a valid full name, email, and 6+ char password.' });
+        return;
+      }
+      if (!ASSIGNABLE_ROLES.includes(role)) {
+        res.status(400).json({ error: 'Select a valid assignable role.' });
+        return;
+      }
+
+      const db = loadDatabase();
+      if (db.investors.some((u) => u.email === email)) {
+        res.status(409).json({ error: 'An account with this email already exists.' });
+        return;
+      }
+
+      const usedCodes = new Set(db.investors.map((i) => i.referralCode));
+      const { hash, salt } = hashPassword(password);
+      const created: StoredInvestor = {
+        id: `inv_${crypto.randomUUID().slice(0, 12)}`,
+        role,
+        accountStatus: 'active',
+        fullName,
+        email,
+        phone,
+        companyName,
+        country,
+        investorType: 'Individual Investor',
+        kycStatus,
+        walletBalance: Number(walletBalance.toFixed(2)),
+        heldBalance: 0,
+        totalDeposited: Number(walletBalance.toFixed(2)),
+        totalWithdrawn: 0,
+        totalYieldCollected: 0,
+        referralCode: generateReferralCode(fullName, usedCodes),
+        referralBonusEarned: 0,
+        hasApprovedDeposit: walletBalance > 0,
+        createdAt: new Date().toISOString(),
+        passwordHash: hash,
+        passwordSalt: salt,
+      };
+
+      db.investors.push(created);
+      createNotificationRecord(db, {
+        userId: created.id,
+        title: `Account Provisioned by Master Admin`,
+        message: `Your ${db.siteConfig.brandName} account is ready with role ${role.toUpperCase()}.`,
+        category: 'system',
+        actionScreen: 'mine',
+      });
+      saveDatabase(db);
+      broadcastToStaff({ type: 'admin:queue_updated' });
+
+      res.status(201).json({ user: sanitizeInvestor(created) });
+    }
+  );
+
+  // Master Admin ONLY: Full CRUD update on any user's data, balance, KYC, role, or status
+  app.patch(
+    '/api/admin/users/:id',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const db = loadDatabase();
+      const target = db.investors.find((u) => u.id === req.params.id);
+      if (!target) {
+        res.status(404).json({ error: 'User account not found.' });
+        return;
+      }
+
+      const isTargetMaster = target.role === 'master_admin';
+
+      if (typeof body.fullName === 'string' && body.fullName.trim().length >= 2) {
+        target.fullName = body.fullName.trim().slice(0, 100);
+      }
+      if (typeof body.phone === 'string' && body.phone.trim().length >= 4) {
+        target.phone = body.phone.trim().slice(0, 32);
+      }
+      if (typeof body.companyName === 'string') {
+        target.companyName = body.companyName.trim().slice(0, 100) || 'Personal Portfolio';
+      }
+      if (typeof body.country === 'string' && body.country.trim().length >= 2) {
+        target.country = body.country.trim().slice(0, 64);
+      }
+      if (typeof body.city === 'string') {
+        target.city = body.city.trim().slice(0, 64) || undefined;
+      }
+      if (
+        typeof body.investorType === 'string' &&
+        VALID_CLASSIFICATIONS.includes(body.investorType as InvestorClassification)
+      ) {
+        target.investorType = body.investorType as InvestorClassification;
+      }
+      if (body.walletBalance !== undefined && Number.isFinite(Number(body.walletBalance))) {
+        target.walletBalance = Number(Math.max(0, Number(body.walletBalance)).toFixed(2));
+      }
+      if (body.heldBalance !== undefined && Number.isFinite(Number(body.heldBalance))) {
+        target.heldBalance = Number(Math.max(0, Number(body.heldBalance)).toFixed(2));
+      }
+      if (
+        typeof body.kycStatus === 'string' &&
+        VALID_KYC_STATUSES.includes(body.kycStatus as KycStatus)
+      ) {
+        target.kycStatus = body.kycStatus as KycStatus;
+      }
+      if (typeof body.doubleYieldDays === 'number' && Number.isFinite(body.doubleYieldDays)) {
+        if (body.doubleYieldDays <= 0) {
+          target.doubleYieldActiveUntil = undefined;
+          for (const r of db.rentals) {
+            if (r.investorId === target.id && r.status === 'active' && r.yieldMultiplier !== 1) {
+              syncRentalMultiplier(r, 1);
+            }
+          }
+        } else {
+          target.doubleYieldActiveUntil = new Date(
+            Date.now() + body.doubleYieldDays * 24 * 60 * 60 * 1000
+          ).toISOString();
+          for (const r of db.rentals) {
+            if (r.investorId === target.id && r.status === 'active' && r.yieldMultiplier !== 2) {
+              syncRentalMultiplier(r, 2);
+            }
+          }
+        }
+      }
+
+      if (!isTargetMaster) {
+        if (typeof body.role === 'string' && ASSIGNABLE_ROLES.includes(body.role as UserRole)) {
+          target.role = body.role as UserRole;
+        }
+        if (body.accountStatus === 'active' || body.accountStatus === 'suspended') {
+          target.accountStatus = body.accountStatus;
+        }
+      }
+
+      notifyUser(db, {
+        userId: target.id,
+        title: 'Account Updated by Master Admin',
+        message: 'Your profile, balance, or permissions were updated system-wide.',
+        category: 'admin',
+        actionScreen: 'mine',
+      });
+      saveDatabase(db);
+
+      const sanitized = sanitizeInvestor(target);
+      for (const c of clients) {
+        if (c.userId === target.id) {
+          c.role = target.role;
+        }
+      }
+      sendToUser(target.id, {
+        type: 'investor:updated',
+        investor: sanitized,
+        notification: 'Your account details were updated by Master Admin.',
+      });
+      sendToUser(target.id, { type: 'rentals:refresh' });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+
+      res.json({ user: sanitized });
+    }
+  );
+
+  // Master Admin ONLY: Delete a non-master account
+  app.delete(
+    '/api/admin/users/:id',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const db = loadDatabase();
+      const target = db.investors.find((u) => u.id === req.params.id);
+      if (!target) {
+        res.status(404).json({ error: 'User account not found.' });
+        return;
+      }
+      if (target.role === 'master_admin') {
+        res.status(403).json({ error: 'The Master Admin account cannot be deleted.' });
+        return;
+      }
+
+      db.investors = db.investors.filter((u) => u.id !== target.id);
+      db.rentals = db.rentals.filter((r) => r.investorId !== target.id);
+      db.transactions = db.transactions.filter((t) => t.investorId !== target.id);
+      db.notifications = db.notifications.filter((n) => n.userId !== target.id);
+      saveDatabase(db);
+
+      for (const c of clients) {
+        if (c.userId === target.id) {
+          c.ws.close();
+        }
+      }
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ ok: true });
     }
   );
 
@@ -1323,10 +1910,16 @@ async function startServer() {
         target.accountStatus = accountStatus;
       }
 
+      notifyUser(db, {
+        userId: target.id,
+        title: `Role Updated: ${target.role.toUpperCase()}`,
+        message: `Master Admin set your system role to ${target.role.toUpperCase()} (${target.accountStatus}).`,
+        category: 'admin',
+        actionScreen: target.role === 'investor' ? 'mine' : 'admin',
+      });
       saveDatabase(db);
       const sanitized = sanitizeInvestor(target);
 
-      // Update active WS role metadata immediately
       for (const c of clients) {
         if (c.userId === target.id) {
           c.role = target.role;
@@ -1344,7 +1937,296 @@ async function startServer() {
     }
   );
 
-  // Admin / Master Admin: Publish live fleet dispatch
+  // Master Admin ONLY: Edit Site Display Content & System Settings (effective system-wide immediately!)
+  app.patch(
+    '/api/admin/site-config',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const db = loadDatabase();
+      const cfg = db.siteConfig;
+
+      const strField = (key: keyof typeof cfg, max = 300) => {
+        if (typeof body[key] === 'string') {
+          const v = (body[key] as string).trim();
+          if (v.length > 0 || key === 'announcementBanner') {
+            (cfg[key] as string) = v.slice(0, max);
+          }
+        }
+      };
+
+      strField('brandName', 50);
+      strField('brandSubtitle', 50);
+      strField('heroKicker', 60);
+      strField('heroTitle', 90);
+      strField('heroDescription', 360);
+      strField('primaryCtaText', 40);
+      strField('secondaryCtaText', 40);
+      strField('announcementBanner', 220);
+      strField('referralHeadline', 100);
+      strField('referralDescription', 360);
+      strField('footerNotice', 100);
+
+      const heroImg = validateSafeImageRef(body.heroImageUrl);
+      if (heroImg) {
+        cfg.heroImageUrl = heroImg;
+      }
+
+      if (body.activeHubsCount !== undefined) {
+        const hubs = Math.floor(Number(body.activeHubsCount));
+        if (Number.isFinite(hubs) && hubs >= 1 && hubs <= 500) {
+          cfg.activeHubsCount = hubs;
+        }
+      }
+
+      if (body.referralRewardRatePct !== undefined) {
+        const pct = Number(body.referralRewardRatePct);
+        if (Number.isFinite(pct) && pct >= 0.5 && pct <= 50) {
+          cfg.referralRewardRatePct = Number(pct.toFixed(2));
+        }
+      }
+
+      if (body.referralDoubleYieldDays !== undefined) {
+        const days = Math.floor(Number(body.referralDoubleYieldDays));
+        if (Number.isFinite(days) && days >= 1 && days <= 365) {
+          cfg.referralDoubleYieldDays = days;
+        }
+      }
+
+      if (Array.isArray(body.howItWorksSteps) && body.howItWorksSteps.length >= 1) {
+        cfg.howItWorksSteps = body.howItWorksSteps
+          .slice(0, 5)
+          .map((s: unknown) => {
+            const step = s as { title?: unknown; body?: unknown };
+            return {
+              title: typeof step.title === 'string' ? step.title.trim().slice(0, 80) : '',
+              body: typeof step.body === 'string' ? step.body.trim().slice(0, 280) : '',
+            };
+          })
+          .filter((s) => s.title && s.body);
+      }
+
+      saveDatabase(db);
+      broadcastAll({ type: 'site:updated', siteConfig: db.siteConfig });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ siteConfig: db.siteConfig });
+    }
+  );
+
+  // Master Admin ONLY: Edit Binance Coin Treasury Deposit Addresses & Network Fees
+  app.patch(
+    '/api/admin/crypto-coins',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const symbol = typeof body.symbol === 'string' ? body.symbol.trim() : '';
+      const networkCode = typeof body.networkCode === 'string' ? body.networkCode.trim() : '';
+      const depositAddress =
+        typeof body.depositAddress === 'string' ? body.depositAddress.trim() : '';
+      const memo = typeof body.memo === 'string' ? body.memo.trim() : undefined;
+      const minDepositUsd = Number(body.minDepositUsd);
+      const minWithdrawUsd = Number(body.minWithdrawUsd);
+      const withdrawFeeUsd = Number(body.withdrawFeeUsd);
+
+      const db = loadDatabase();
+      const coin = db.cryptoCoins.find((c) => c.symbol === symbol);
+      const net = coin?.networks.find((n) => n.networkCode === networkCode);
+      if (!net) {
+        res.status(404).json({ error: 'Selected coin or network was not found.' });
+        return;
+      }
+
+      if (depositAddress) {
+        const addrErr = validateNetworkAddress(net.networkCode, depositAddress);
+        if (addrErr) {
+          res.status(400).json({ error: addrErr });
+          return;
+        }
+        net.depositAddress = depositAddress;
+      }
+      if (memo !== undefined) {
+        net.memo = memo || undefined;
+      }
+      if (Number.isFinite(minDepositUsd) && minDepositUsd >= 1) {
+        net.minDepositUsd = Number(minDepositUsd.toFixed(2));
+      }
+      if (Number.isFinite(minWithdrawUsd) && minWithdrawUsd >= 1) {
+        net.minWithdrawUsd = Number(minWithdrawUsd.toFixed(2));
+      }
+      if (Number.isFinite(withdrawFeeUsd) && withdrawFeeUsd >= 0) {
+        net.withdrawFeeUsd = Number(withdrawFeeUsd.toFixed(2));
+      }
+
+      saveDatabase(db);
+      broadcastAll({ type: 'coins:updated', cryptoCoins: db.cryptoCoins });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ cryptoCoins: db.cryptoCoins });
+    }
+  );
+
+  // Master Admin ONLY: Robots Full CRUD (Create / Update / Delete)
+  app.post(
+    '/api/admin/robots',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      const modelCode = typeof body.modelCode === 'string' ? body.modelCode.trim().toUpperCase() : '';
+      const category = VALID_ROBOT_CATEGORIES.includes(body.category as RobotCategory)
+        ? (body.category as RobotCategory)
+        : 'Warehouse & Logistics';
+      const tagline = typeof body.tagline === 'string' ? body.tagline.trim() : '';
+      const description = typeof body.description === 'string' ? body.description.trim() : tagline;
+      const facilityHub = typeof body.facilityHub === 'string' ? body.facilityHub.trim() : 'Zurich Robotics Annex';
+      const rentalPrice = Number(body.rentalPrice);
+      const dailyReturnRate = Number(body.dailyReturnRate);
+      const cycleDays = Math.floor(Number(body.cycleDays));
+      const totalUnits = Math.floor(Number(body.totalUnits ?? 10));
+      const availableUnits = Math.floor(Number(body.availableUnits ?? totalUnits));
+      const imageUrl =
+        validateSafeImageRef(body.imageUrl) ||
+        '/src/assets/images/robot_logistics_amr_1795701350768.jpg';
+
+      if (name.length < 3 || modelCode.length < 3 || tagline.length < 5) {
+        res.status(400).json({ error: 'Provide robot name, model code, and tagline.' });
+        return;
+      }
+      if (!Number.isFinite(rentalPrice) || rentalPrice < 50 || !Number.isFinite(dailyReturnRate) || dailyReturnRate <= 0 || cycleDays < 1) {
+        res.status(400).json({ error: 'Enter valid price, daily rate %, and cycle days.' });
+        return;
+      }
+
+      const db = loadDatabase();
+      const referralBonusUsd =
+        body.referralBonusUsd !== undefined && Number.isFinite(Number(body.referralBonusUsd))
+          ? Number(Number(body.referralBonusUsd).toFixed(2))
+          : Number(((rentalPrice * db.siteConfig.referralRewardRatePct) / 100).toFixed(2));
+
+      const created: RobotMachine = {
+        id: `nx-${crypto.randomUUID().slice(0, 8)}`,
+        modelCode,
+        name,
+        category,
+        tagline,
+        description,
+        imageUrl,
+        rentalPrice: Number(rentalPrice.toFixed(2)),
+        dailyReturnRate: Number(dailyReturnRate.toFixed(2)),
+        cycleDays,
+        availableUnits: Math.max(0, availableUnits),
+        totalUnits: Math.max(1, totalUnits),
+        facilityHub,
+        referralBonusUsd,
+        doubleYieldEligible: body.doubleYieldEligible !== false,
+        specs: {
+          neuralCore:
+            typeof body.neuralCore === 'string' && body.neuralCore.trim()
+              ? body.neuralCore.trim()
+              : 'Nexora AI Core V4',
+          autonomyLevel:
+            typeof body.autonomyLevel === 'string' && body.autonomyLevel.trim()
+              ? body.autonomyLevel.trim()
+              : 'Level 4 Autonomous',
+          payloadCapacity:
+            typeof body.payloadCapacity === 'string' && body.payloadCapacity.trim()
+              ? body.payloadCapacity.trim()
+              : '45 kg continuous',
+          uptimeSla: '99.4% verified',
+        },
+      };
+
+      db.robots.unshift(created);
+      saveDatabase(db);
+      broadcastAll({ type: 'fleet:updated', robots: db.robots });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.status(201).json({ robot: created });
+    }
+  );
+
+  app.patch(
+    '/api/admin/robots/:id',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const db = loadDatabase();
+      const robot = db.robots.find((r) => r.id === req.params.id);
+      if (!robot) {
+        res.status(404).json({ error: 'Robot machine not found.' });
+        return;
+      }
+
+      if (typeof body.name === 'string' && body.name.trim().length >= 2) {
+        robot.name = body.name.trim();
+      }
+      if (typeof body.modelCode === 'string' && body.modelCode.trim().length >= 2) {
+        robot.modelCode = body.modelCode.trim().toUpperCase();
+      }
+      if (VALID_ROBOT_CATEGORIES.includes(body.category as RobotCategory)) {
+        robot.category = body.category as RobotCategory;
+      }
+      if (typeof body.tagline === 'string' && body.tagline.trim().length >= 3) {
+        robot.tagline = body.tagline.trim();
+      }
+      if (typeof body.description === 'string' && body.description.trim().length >= 3) {
+        robot.description = body.description.trim();
+      }
+      if (typeof body.facilityHub === 'string' && body.facilityHub.trim().length >= 2) {
+        robot.facilityHub = body.facilityHub.trim();
+      }
+      const nextImg = validateSafeImageRef(body.imageUrl);
+      if (nextImg) {
+        robot.imageUrl = nextImg;
+      }
+      if (body.rentalPrice !== undefined && Number(body.rentalPrice) >= 50) {
+        robot.rentalPrice = Number(Number(body.rentalPrice).toFixed(2));
+      }
+      if (body.dailyReturnRate !== undefined && Number(body.dailyReturnRate) > 0) {
+        robot.dailyReturnRate = Number(Number(body.dailyReturnRate).toFixed(2));
+      }
+      if (body.cycleDays !== undefined && Number(body.cycleDays) >= 1) {
+        robot.cycleDays = Math.floor(Number(body.cycleDays));
+      }
+      if (body.availableUnits !== undefined && Number(body.availableUnits) >= 0) {
+        robot.availableUnits = Math.floor(Number(body.availableUnits));
+      }
+      if (body.totalUnits !== undefined && Number(body.totalUnits) >= 1) {
+        robot.totalUnits = Math.floor(Number(body.totalUnits));
+      }
+      if (body.referralBonusUsd !== undefined && Number(body.referralBonusUsd) >= 0) {
+        robot.referralBonusUsd = Number(Number(body.referralBonusUsd).toFixed(2));
+      }
+
+      saveDatabase(db);
+      broadcastAll({ type: 'fleet:updated', robots: db.robots });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ robot });
+    }
+  );
+
+  app.delete(
+    '/api/admin/robots/:id',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const db = loadDatabase();
+      const idx = db.robots.findIndex((r) => r.id === req.params.id);
+      if (idx === -1) {
+        res.status(404).json({ error: 'Robot machine not found.' });
+        return;
+      }
+      db.robots.splice(idx, 1);
+      saveDatabase(db);
+      broadcastAll({ type: 'fleet:updated', robots: db.robots });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ ok: true });
+    }
+  );
+
+  // Admin / Master Admin: Dispatches / Fleet News Full CRUD
   app.post(
     '/api/admin/dispatches',
     requireAuth,
@@ -1354,8 +2236,9 @@ async function startServer() {
       const category = typeof body.category === 'string' ? body.category.trim() : 'Deployment';
       const title = typeof body.title === 'string' ? body.title.trim() : '';
       const summary = typeof body.summary === 'string' ? body.summary.trim() : '';
+      const imageUrl = validateSafeImageRef(body.imageUrl);
 
-      if (title.length < 6 || summary.length < 10) {
+      if (title.length < 4 || summary.length < 8) {
         res.status(400).json({ error: 'Provide a clear title and summary for the dispatch.' });
         return;
       }
@@ -1370,16 +2253,190 @@ async function startServer() {
         }).format(new Date()),
         title,
         summary,
+        imageUrl: imageUrl || '/src/assets/images/hero_robotics_floor_1795701351020.jpg',
       };
       db.dispatches.unshift(dispatch);
       saveDatabase(db);
 
       broadcastAll({ type: 'dispatches:updated', dispatches: db.dispatches });
+      broadcastToStaff({ type: 'admin:queue_updated' });
       res.status(201).json({ dispatch });
     }
   );
 
-  // Admin / Master Admin: Credit +24h operating cycle to active user rentals for live testing
+  app.patch(
+    '/api/admin/dispatches/:id',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const db = loadDatabase();
+      const dispatch = db.dispatches.find((d) => d.id === req.params.id);
+      if (!dispatch) {
+        res.status(404).json({ error: 'Dispatch not found.' });
+        return;
+      }
+      if (typeof body.category === 'string' && body.category.trim()) {
+        dispatch.category = body.category.trim();
+      }
+      if (typeof body.title === 'string' && body.title.trim().length >= 4) {
+        dispatch.title = body.title.trim();
+      }
+      if (typeof body.summary === 'string' && body.summary.trim().length >= 8) {
+        dispatch.summary = body.summary.trim();
+      }
+      const nextImg = validateSafeImageRef(body.imageUrl);
+      if (nextImg) {
+        dispatch.imageUrl = nextImg;
+      }
+      saveDatabase(db);
+      broadcastAll({ type: 'dispatches:updated', dispatches: db.dispatches });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ dispatch });
+    }
+  );
+
+  app.delete(
+    '/api/admin/dispatches/:id',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const db = loadDatabase();
+      const idx = db.dispatches.findIndex((d) => d.id === req.params.id);
+      if (idx === -1) {
+        res.status(404).json({ error: 'Dispatch not found.' });
+        return;
+      }
+      db.dispatches.splice(idx, 1);
+      saveDatabase(db);
+      broadcastAll({ type: 'dispatches:updated', dispatches: db.dispatches });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ ok: true });
+    }
+  );
+
+  // Master Admin ONLY: Edit or Cancel any Rental Contract
+  app.patch(
+    '/api/admin/rentals/:id',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const db = loadDatabase();
+      const rental = db.rentals.find((r) => r.id === req.params.id);
+      if (!rental) {
+        res.status(404).json({ error: 'Rental contract not found.' });
+        return;
+      }
+
+      if (body.yieldMultiplier !== undefined) {
+        const mult = Number(body.yieldMultiplier);
+        if (Number.isFinite(mult) && mult >= 1 && mult <= 5) {
+          syncRentalMultiplier(rental, mult);
+        }
+      }
+      if (body.status === 'active' || body.status === 'completed') {
+        rental.status = body.status;
+      }
+      if (body.simulatedDaysAdd !== undefined) {
+        const add = Number(body.simulatedDaysAdd);
+        if (Number.isFinite(add) && add > 0 && add <= 60) {
+          rental.simulatedDaysElapsed += add;
+        }
+      }
+
+      saveDatabase(db);
+      sendToUser(rental.investorId, { type: 'rentals:refresh' });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ rental: enrichRental(rental) });
+    }
+  );
+
+  app.delete(
+    '/api/admin/rentals/:id',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const db = loadDatabase();
+      const idx = db.rentals.findIndex((r) => r.id === req.params.id);
+      if (idx === -1) {
+        res.status(404).json({ error: 'Rental contract not found.' });
+        return;
+      }
+      const [removed] = db.rentals.splice(idx, 1);
+      const robot = db.robots.find((r) => r.id === removed.robotId);
+      if (robot && removed.status === 'active') {
+        robot.availableUnits += removed.quantity;
+      }
+      saveDatabase(db);
+      sendToUser(removed.investorId, { type: 'rentals:refresh' });
+      broadcastAll({ type: 'fleet:updated', robots: db.robots });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ ok: true });
+    }
+  );
+
+  // Master Admin ONLY: Delete transaction record
+  app.delete(
+    '/api/admin/transactions/:id',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const db = loadDatabase();
+      const idx = db.transactions.findIndex((t) => t.id === req.params.id);
+      if (idx === -1) {
+        res.status(404).json({ error: 'Transaction not found.' });
+        return;
+      }
+      db.transactions.splice(idx, 1);
+      saveDatabase(db);
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ ok: true });
+    }
+  );
+
+  // Master Admin ONLY: Broadcast live notification to all accounts or targeted user
+  app.post(
+    '/api/admin/notifications',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const title = typeof body.title === 'string' ? body.title.trim() : '';
+      const message = typeof body.message === 'string' ? body.message.trim() : '';
+      const targetUserId = typeof body.userId === 'string' ? body.userId.trim() : 'all';
+
+      if (title.length < 3 || message.length < 5) {
+        res.status(400).json({ error: 'Enter a notification title and message.' });
+        return;
+      }
+
+      const db = loadDatabase();
+      const recipients =
+        targetUserId === 'all'
+          ? db.investors
+          : db.investors.filter((u) => u.id === targetUserId);
+
+      if (recipients.length === 0) {
+        res.status(404).json({ error: 'Target recipient not found.' });
+        return;
+      }
+
+      for (const user of recipients) {
+        notifyUser(db, {
+          userId: user.id,
+          title,
+          message,
+          category: 'admin',
+          actionScreen: 'home' as unknown as AppNotification['actionScreen'],
+        });
+      }
+      saveDatabase(db);
+      res.status(201).json({ sentCount: recipients.length });
+    }
+  );
+
+  // Admin / Master Admin: Credit +24h operating cycle to active user rentals
   app.post(
     '/api/admin/rentals/advance-all',
     requireAuth,
@@ -1398,6 +2455,7 @@ async function startServer() {
       }
       saveDatabase(db);
       broadcastAll({ type: 'rentals:refresh' });
+      broadcastToStaff({ type: 'admin:queue_updated' });
       res.json({ ok: true, updated });
     }
   );

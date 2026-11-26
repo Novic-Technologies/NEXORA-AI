@@ -13,12 +13,12 @@ export function RobotImage({ src, alt, className = '' }: RobotImageProps) {
   if (failed || !src) {
     return (
       <div
-        className={`flex flex-col items-center justify-center bg-[#F1F5F9] text-[#0F172A] p-4 ${className}`}
+        className={`flex flex-col items-center justify-center bg-[#F1F5F9] dark:bg-[#1E293B] text-[#0F172A] dark:text-[#F8FAFC] p-4 ${className}`}
         role="img"
         aria-label={alt}
       >
-        <Bot className="w-8 h-8 text-[#475569] mb-2" strokeWidth={1.5} />
-        <span className="text-xs font-medium text-center text-[#475569] line-clamp-2">
+        <Bot className="w-8 h-8 text-[#475569] dark:text-[#94A3B8] mb-2" strokeWidth={1.5} />
+        <span className="text-xs font-medium text-center text-[#475569] dark:text-[#94A3B8] line-clamp-2">
           {alt}
         </span>
       </div>

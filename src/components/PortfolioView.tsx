@@ -4,6 +4,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
+  Bell,
   Bot,
   CheckCircle2,
   ChevronRight,
@@ -11,6 +12,7 @@ import {
   Coins,
   Crown,
   FileText,
+  Gift,
   Layers,
   LogOut,
   Settings,
@@ -34,6 +36,7 @@ interface PortfolioViewProps {
   investor: InvestorProfile;
   rentals: EnrichedMachineRental[];
   transactions: WalletTransaction[];
+  unreadNotifications: number;
   loading: boolean;
   onRentalUpdated: (
     rental: EnrichedMachineRental,
@@ -45,6 +48,8 @@ interface PortfolioViewProps {
   onOpenActivity: () => void;
   onOpenAccount: () => void;
   onOpenVerification: () => void;
+  onOpenNotifications: () => void;
+  onOpenReferrals: () => void;
   onOpenAdmin?: () => void;
   onSignOut: () => void;
 }
@@ -53,6 +58,7 @@ export function PortfolioView({
   investor,
   rentals,
   transactions,
+  unreadNotifications,
   loading,
   onRentalUpdated,
   onBrowseMachines,
@@ -60,6 +66,8 @@ export function PortfolioView({
   onOpenActivity,
   onOpenAccount,
   onOpenVerification,
+  onOpenNotifications,
+  onOpenReferrals,
   onOpenAdmin,
   onSignOut,
 }: PortfolioViewProps) {
@@ -69,7 +77,10 @@ export function PortfolioView({
   const activeRentals = rentals.filter((r) => r.status === 'active');
   const completedRentals = rentals.filter((r) => r.status === 'completed');
   const capitalDeployed = activeRentals.reduce((sum, r) => sum + r.totalCost, 0);
-  const dailyYieldToday = activeRentals.reduce((sum, r) => sum + r.dailyPayout, 0);
+  const dailyYieldToday = activeRentals.reduce(
+    (sum, r) => sum + (r.effectiveDailyPayout ?? r.dailyPayout),
+    0
+  );
   const pendingTransfers = transactions.filter((t) => t.status === 'pending');
   const recentTx = transactions.slice(0, 4);
 
@@ -78,6 +89,11 @@ export function PortfolioView({
     investor.role === 'master_admin' ||
     investor.role === 'admin' ||
     investor.role === 'moderator';
+
+  const doubleBoostActive = Boolean(
+    investor.doubleYieldActiveUntil &&
+      new Date(investor.doubleYieldActiveUntil).getTime() > Date.now()
+  );
 
   const handleClaimYield = async (rentalId: string) => {
     setActionError(null);
@@ -94,24 +110,39 @@ export function PortfolioView({
 
   return (
     <div className="pb-6 space-y-5">
-      <header className="sticky top-0 z-30 h-14 px-4 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] flex items-center justify-between">
-        <h1 className="font-display text-base font-bold text-[#111827]">
+      <header className="sticky top-0 z-30 h-14 px-4 bg-white/95 dark:bg-[#0F172A]/95 backdrop-blur-md border-b border-[#E5E7EB] dark:border-[#1E293B] flex items-center justify-between gap-2">
+        <h1 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC]">
           Investor Portfolio
         </h1>
-        <button
-          type="button"
-          onClick={onOpenAccount}
-          className="text-xs font-semibold text-[#2563EB] cursor-pointer"
-        >
-          Account
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenNotifications}
+            aria-label="Notifications"
+            className="relative w-8 h-8 rounded-lg border border-[#E5E7EB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#1E293B] flex items-center justify-center text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
+          >
+            <Bell className="w-4 h-4" />
+            {unreadNotifications > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#2563EB] text-white text-[9.5px] font-bold flex items-center justify-center">
+                {unreadNotifications > 9 ? '9+' : unreadNotifications}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onOpenAccount}
+            className="text-xs font-semibold text-[#2563EB] dark:text-[#60A5FA] cursor-pointer"
+          >
+            Settings
+          </button>
+        </div>
       </header>
 
       <div className="px-4 space-y-4">
-        {/* Investor Identity Card with Real Profile Photo */}
-        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-3.5 flex items-center justify-between gap-3">
+        {/* Investor Identity Card */}
+        <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-3.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-12 h-12 rounded-full bg-[#111827] text-white font-semibold overflow-hidden flex items-center justify-center shrink-0 border border-[#E5E7EB]">
+            <div className="w-12 h-12 rounded-full bg-[#111827] dark:bg-[#1E293B] text-white font-semibold overflow-hidden flex items-center justify-center shrink-0 border border-[#E5E7EB] dark:border-[#334155]">
               {investor.avatarUrl ? (
                 <img
                   src={investor.avatarUrl}
@@ -124,14 +155,14 @@ export function PortfolioView({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <p className="text-sm font-bold text-[#111827] truncate">
+                <p className="text-sm font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
                   {investor.fullName}
                 </p>
                 {investor.kycStatus === 'verified' && (
-                  <BadgeCheck className="w-4 h-4 text-[#059669] shrink-0" />
+                  <BadgeCheck className="w-4 h-4 text-[#059669] dark:text-[#34D399] shrink-0" />
                 )}
               </div>
-              <p className="text-[11px] text-[#6B7280] truncate">
+              <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8] truncate">
                 {investor.email} · {investor.companyName}
               </p>
             </div>
@@ -142,10 +173,10 @@ export function PortfolioView({
               investor.role === 'master_admin'
                 ? 'bg-[#1E1B4B] text-white'
                 : investor.role === 'admin'
-                  ? 'bg-blue-50 text-[#2563EB]'
+                  ? 'bg-blue-50 dark:bg-blue-950/60 text-[#2563EB] dark:text-[#60A5FA]'
                   : investor.kycStatus === 'verified'
-                    ? 'bg-emerald-50 text-[#059669]'
-                    : 'bg-amber-50 text-[#D97706]'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-[#059669] dark:text-[#34D399]'
+                    : 'bg-amber-50 dark:bg-amber-950/60 text-[#D97706] dark:text-[#FBBF24]'
             }`}
           >
             {investor.role === 'master_admin'
@@ -156,32 +187,66 @@ export function PortfolioView({
           </span>
         </div>
 
+        {/* 2x Double Yield & Team Referral Banner */}
+        <button
+          type="button"
+          onClick={onOpenReferrals}
+          className={`w-full text-left rounded-2xl border p-3.5 flex items-center justify-between gap-3 cursor-pointer ${
+            doubleBoostActive
+              ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/70 dark:bg-emerald-950/40'
+              : 'border-[#BFDBFE] dark:border-[#1E3A8A] bg-[#EFF6FF]/70 dark:bg-[#0F172A]'
+          }`}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className={`w-9 h-9 rounded-xl text-white flex items-center justify-center shrink-0 ${
+                doubleBoostActive ? 'bg-[#059669]' : 'bg-[#2563EB]'
+              }`}
+            >
+              <Gift className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
+                {doubleBoostActive
+                  ? '2x Double Daily Yield Active!'
+                  : 'Team & Referral Rewards'}
+              </p>
+              <p className="text-[11px] text-[#4B5563] dark:text-[#94A3B8] truncate">
+                {doubleBoostActive
+                  ? `Boosted payouts until ${formatDateTime(investor.doubleYieldActiveUntil!)}`
+                  : `Code ${investor.referralCode} · Earned ${formatUsd(investor.referralBonusEarned)}`}
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-[#6B7280] dark:text-[#94A3B8] shrink-0" />
+        </button>
+
         {/* Verification Action Banner when not yet verified */}
         {investor.kycStatus !== 'verified' && (
           <button
             type="button"
             onClick={onOpenVerification}
-            className="w-full text-left rounded-2xl border border-[#FDE68A] bg-amber-50/70 p-3.5 flex items-center justify-between gap-3 cursor-pointer"
+            className="w-full text-left rounded-2xl border border-[#FDE68A] dark:border-amber-900 bg-amber-50/70 dark:bg-amber-950/40 p-3.5 flex items-center justify-between gap-3 cursor-pointer"
           >
             <div className="min-w-0">
-              <p className="text-xs font-bold text-amber-950">
+              <p className="text-xs font-bold text-amber-950 dark:text-amber-100">
                 {investor.kycStatus === 'pending'
                   ? 'KYC Verification Under Review'
                   : investor.kycStatus === 'rejected'
                     ? 'Verification Declined — Update Records'
                     : 'Verify Identity & Profile Photo'}
               </p>
-              <p className="text-[11px] text-amber-900 mt-0.5">
+              <p className="text-[11px] text-amber-900 dark:text-amber-200 mt-0.5">
                 {investor.kycStatus === 'pending'
                   ? 'Waiting for Master Admin sign-off on your uploaded ID.'
                   : 'Submit photo, ID & optional financial proof to unlock withdrawals.'}
               </p>
             </div>
-            <ChevronRight className="w-4 h-4 text-amber-800 shrink-0" />
+            <ChevronRight className="w-4 h-4 text-amber-800 dark:text-amber-300 shrink-0" />
           </button>
         )}
 
-        {/* Staff Console Entry for Master Admin / Promoted Admins */}
+        {/* Staff Console Entry */}
         {isStaff && onOpenAdmin && (
           <button
             type="button"
@@ -203,7 +268,7 @@ export function PortfolioView({
                     : 'Open Staff Operations Console'}
                 </p>
                 <p className="text-[10.5px] text-[#C7D2FE]">
-                  Approve deposits/withdrawals, review KYC & manage roles
+                  Full CRUD control: users, roles, site display, fleet & approvals
                 </p>
               </div>
             </div>
@@ -212,7 +277,7 @@ export function PortfolioView({
         )}
 
         {/* Wallet Card */}
-        <div className="rounded-2xl bg-[#111827] text-white p-5 space-y-4">
+        <div className="rounded-2xl bg-[#111827] dark:bg-[#0F172A] border border-[#1F2937] dark:border-[#1E293B] text-white p-5 space-y-4">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[10px] tracking-[0.12em] uppercase text-[#9CA3AF]">
@@ -265,40 +330,40 @@ export function PortfolioView({
                 Daily Yield Rate
               </p>
               <p className="mt-0.5 font-mono font-semibold tabular-nums text-[#34D399]">
-                {formatUsd(dailyYieldToday)}/d
+                {formatUsd(dailyYieldToday)}/d{doubleBoostActive ? ' (2x)' : ''}
               </p>
             </div>
           </div>
         </div>
 
         {/* 3 Mini Stat Cards */}
-        <div className="grid grid-cols-3 bg-white border border-[#E5E7EB] rounded-2xl divide-x divide-[#E5E7EB]">
+        <div className="grid grid-cols-3 bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl divide-x divide-[#E5E7EB] dark:divide-[#1E293B]">
           <div className="p-3">
-            <div className="flex items-center gap-1 text-[#6B7280] text-[10.5px]">
+            <div className="flex items-center gap-1 text-[#6B7280] dark:text-[#94A3B8] text-[10.5px]">
               <Layers className="w-3 h-3" />
               <span>Active</span>
             </div>
-            <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827]">
+            <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
               {activeRentals.reduce((s, r) => s + r.quantity, 0)}
             </p>
           </div>
 
           <div className="p-3">
-            <div className="flex items-center gap-1 text-[#6B7280] text-[10.5px]">
-              <TrendingUp className="w-3 h-3 text-[#059669]" />
+            <div className="flex items-center gap-1 text-[#6B7280] dark:text-[#94A3B8] text-[10.5px]">
+              <TrendingUp className="w-3 h-3 text-[#059669] dark:text-[#34D399]" />
               <span>Paid out</span>
             </div>
-            <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#059669]">
+            <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#059669] dark:text-[#34D399]">
               {formatUsd(investor.totalYieldCollected)}
             </p>
           </div>
 
           <div className="p-3">
-            <div className="flex items-center gap-1 text-[#6B7280] text-[10.5px]">
+            <div className="flex items-center gap-1 text-[#6B7280] dark:text-[#94A3B8] text-[10.5px]">
               <CheckCircle2 className="w-3 h-3" />
               <span>Settled</span>
             </div>
-            <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827]">
+            <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
               {completedRentals.length}
             </p>
           </div>
@@ -306,9 +371,9 @@ export function PortfolioView({
 
         {/* Pending Approvals Notice */}
         {pendingTransfers.length > 0 && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 space-y-2">
-            <p className="text-xs font-bold text-amber-950 inline-flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-[#D97706]" />
+          <div className="rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3.5 space-y-2">
+            <p className="text-xs font-bold text-amber-950 dark:text-amber-100 inline-flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-[#D97706] dark:text-[#FBBF24]" />
               <span>
                 {pendingTransfers.length} Transfer{pendingTransfers.length > 1 ? 's' : ''} Pending Master Admin Approval
               </span>
@@ -316,12 +381,12 @@ export function PortfolioView({
             {pendingTransfers.map((tx) => (
               <div
                 key={tx.id}
-                className="flex items-center justify-between text-[11px] bg-white rounded-xl px-3 py-2 border border-amber-100"
+                className="flex items-center justify-between text-[11px] bg-white dark:bg-[#111827] rounded-xl px-3 py-2 border border-amber-100 dark:border-amber-900/50"
               >
-                <span className="font-medium text-[#111827] truncate">
+                <span className="font-medium text-[#111827] dark:text-[#F8FAFC] truncate">
                   {tx.reference}
                 </span>
-                <span className="font-mono font-bold text-[#D97706] shrink-0">
+                <span className="font-mono font-bold text-[#D97706] dark:text-[#FBBF24] shrink-0">
                   {formatUsd(tx.amount)}
                 </span>
               </div>
@@ -332,20 +397,20 @@ export function PortfolioView({
         {actionError && (
           <div
             role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-800"
+            className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3.5 py-2.5 text-xs font-medium text-red-800 dark:text-red-200"
           >
             {actionError}
           </div>
         )}
 
-        {/* Active Rented Machines with Live Server-Synced Yield */}
+        {/* Active Rented Machines */}
         <section className="space-y-2.5">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-display text-base font-bold text-[#111827]">
+              <h2 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC]">
                 Rented machines
               </h2>
-              <p className="text-[11px] text-[#6B7280]">
+              <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
                 {rentals.length === 0
                   ? 'No active contracts yet'
                   : `${rentals.length} active unit contract${rentals.length === 1 ? '' : 's'}`}
@@ -354,21 +419,23 @@ export function PortfolioView({
             <button
               type="button"
               onClick={onBrowseMachines}
-              className="text-xs font-semibold text-[#2563EB] cursor-pointer"
+              className="text-xs font-semibold text-[#2563EB] dark:text-[#60A5FA] cursor-pointer"
             >
               + Rent unit
             </button>
           </div>
 
           {loading ? (
-            <div className="h-32 rounded-2xl border border-[#E5E7EB] bg-white animate-pulse" />
+            <div className="h-32 rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] animate-pulse" />
           ) : rentals.length === 0 ? (
-            <div className="rounded-2xl border border-[#E5E7EB] bg-white px-5 py-8 text-center">
-              <div className="w-11 h-11 rounded-xl bg-[#F3F4F6] text-[#6B7280] flex items-center justify-center mx-auto">
+            <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] px-5 py-8 text-center">
+              <div className="w-11 h-11 rounded-xl bg-[#F3F4F6] dark:bg-[#1E293B] text-[#6B7280] dark:text-[#94A3B8] flex items-center justify-center mx-auto">
                 <Bot className="w-5 h-5" />
               </div>
-              <p className="mt-3 text-sm font-semibold text-[#111827]">No units yet</p>
-              <p className="mt-1 text-xs text-[#6B7280] max-w-[260px] mx-auto leading-relaxed">
+              <p className="mt-3 text-sm font-semibold text-[#111827] dark:text-[#F8FAFC]">
+                No units yet
+              </p>
+              <p className="mt-1 text-xs text-[#6B7280] dark:text-[#94A3B8] max-w-[260px] mx-auto leading-relaxed">
                 Lease a Nexora AI machine from the fleet catalog to start earning live
                 daily returns.
               </p>
@@ -387,13 +454,14 @@ export function PortfolioView({
                 const isBusy = busyId === rental.id;
                 const claimable = Number(rental.accruedUnclaimedYield.toFixed(2));
                 const canClaim = claimable >= 0.01;
+                const effectiveDaily = rental.effectiveDailyPayout ?? rental.dailyPayout;
                 return (
                   <div
                     key={rental.id}
-                    className="rounded-2xl border border-[#E5E7EB] bg-white p-3.5 space-y-3"
+                    className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-3.5 space-y-3"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#F3F4F6] shrink-0">
+                      <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#F3F4F6] dark:bg-[#1E293B] shrink-0">
                         <RobotImage
                           src={rental.robotImageUrl}
                           alt={rental.robotName}
@@ -401,31 +469,38 @@ export function PortfolioView({
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[10.5px] font-mono text-[#6B7280]">
-                          {rental.robotModelCode} · {rental.facilityHub}
-                        </p>
-                        <h3 className="text-xs font-bold text-[#111827] truncate">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[10.5px] font-mono text-[#6B7280] dark:text-[#94A3B8] truncate">
+                            {rental.robotModelCode} · {rental.facilityHub}
+                          </p>
+                          {rental.yieldMultiplier > 1 && (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-[#059669] dark:text-[#34D399] font-mono text-[9.5px] font-bold shrink-0">
+                              {rental.yieldMultiplier}x YIELD
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-xs font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
                           {rental.quantity}x {rental.robotName}
                         </h3>
-                        <p className="text-[11px] font-mono tabular-nums text-[#059669] mt-0.5 font-semibold">
-                          {formatUsd(rental.dailyPayout)}/day · {rental.status}
+                        <p className="text-[11px] font-mono tabular-nums text-[#059669] dark:text-[#34D399] mt-0.5 font-semibold">
+                          {formatUsd(effectiveDaily)}/day · {rental.status}
                         </p>
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-[10.5px]">
-                        <span className="text-[#6B7280]">
+                        <span className="text-[#6B7280] dark:text-[#94A3B8]">
                           Live Accrued:{' '}
-                          <strong className="font-mono text-[#059669]">
+                          <strong className="font-mono text-[#059669] dark:text-[#34D399]">
                             {formatUsd(rental.accruedUnclaimedYield, 4)}
                           </strong>
                         </span>
-                        <span className="font-mono tabular-nums font-semibold text-[#111827]">
+                        <span className="font-mono tabular-nums font-semibold text-[#111827] dark:text-[#F8FAFC]">
                           Day {rental.daysElapsed} / {rental.cycleDays}
                         </span>
                       </div>
-                      <div className="h-1.5 w-full rounded-full bg-[#E5E7EB] overflow-hidden">
+                      <div className="h-1.5 w-full rounded-full bg-[#E5E7EB] dark:bg-[#1E293B] overflow-hidden">
                         <div
                           className="h-full bg-[#2563EB] transition-all duration-500"
                           style={{ width: `${Math.max(2, rental.progressPercent)}%` }}
@@ -456,13 +531,13 @@ export function PortfolioView({
         {/* Recent Activity */}
         <section className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-base font-bold text-[#111827]">
+            <h2 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC]">
               Recent activity
             </h2>
             <button
               type="button"
               onClick={onOpenActivity}
-              className="text-xs font-semibold text-[#2563EB] inline-flex items-center gap-0.5 cursor-pointer"
+              className="text-xs font-semibold text-[#2563EB] dark:text-[#60A5FA] inline-flex items-center gap-0.5 cursor-pointer"
             >
               <span>View all</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -470,35 +545,38 @@ export function PortfolioView({
           </div>
 
           {recentTx.length === 0 ? (
-            <div className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-5 text-center text-xs text-[#6B7280]">
+            <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] px-4 py-5 text-center text-xs text-[#6B7280] dark:text-[#94A3B8]">
               Wallet activity will appear here.
             </div>
           ) : (
-            <div className="rounded-2xl border border-[#E5E7EB] bg-white divide-y divide-[#F3F4F6]">
+            <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] divide-y divide-[#F3F4F6] dark:divide-[#1E293B]">
               {recentTx.map((tx) => {
-                const inbound = tx.type === 'deposit' || tx.type === 'yield_payout';
+                const inbound =
+                  tx.type === 'deposit' ||
+                  tx.type === 'yield_payout' ||
+                  tx.type === 'referral_reward';
                 return (
                   <div
                     key={tx.id}
                     className="px-4 py-3 flex items-center justify-between gap-3"
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-[#111827] truncate">
+                      <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC] truncate">
                         {tx.reference}
                       </p>
-                      <p className="text-[10.5px] font-mono text-[#6B7280] mt-0.5">
+                      <p className="text-[10.5px] font-mono text-[#6B7280] dark:text-[#94A3B8] mt-0.5">
                         {tx.status.toUpperCase()} · {formatDateTime(tx.createdAt)}
                       </p>
                     </div>
                     <span
                       className={`text-xs font-mono font-bold tabular-nums shrink-0 ${
                         tx.status === 'rejected'
-                          ? 'text-red-600 line-through'
+                          ? 'text-red-600 dark:text-red-400 line-through'
                           : tx.status === 'pending'
-                            ? 'text-[#D97706]'
+                            ? 'text-[#D97706] dark:text-[#FBBF24]'
                             : inbound
-                              ? 'text-[#059669]'
-                              : 'text-[#111827]'
+                              ? 'text-[#059669] dark:text-[#34D399]'
+                              : 'text-[#111827] dark:text-[#F8FAFC]'
                       }`}
                     >
                       {inbound ? '+' : '-'}
@@ -512,14 +590,40 @@ export function PortfolioView({
         </section>
 
         {/* Account Menu */}
-        <div className="rounded-2xl border border-[#E5E7EB] bg-white divide-y divide-[#F3F4F6]">
+        <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] divide-y divide-[#F3F4F6] dark:divide-[#1E293B]">
+          <button
+            type="button"
+            onClick={onOpenReferrals}
+            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
+          >
+            <span className="inline-flex items-center gap-3">
+              <Gift className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
+              <span>Team & Referral Rewards</span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-[#9CA3AF]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenNotifications}
+            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
+          >
+            <span className="inline-flex items-center gap-3">
+              <Bell className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
+              <span>
+                Notifications Inbox{unreadNotifications > 0 ? ` (${unreadNotifications} new)` : ''}
+              </span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-[#9CA3AF]" />
+          </button>
+
           <button
             type="button"
             onClick={onOpenVerification}
-            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] cursor-pointer"
+            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
           >
             <span className="inline-flex items-center gap-3">
-              <BadgeCheck className="w-4 h-4 text-[#059669]" />
+              <BadgeCheck className="w-4 h-4 text-[#059669] dark:text-[#34D399]" />
               <span>Identity Verification & Financial Proof</span>
             </span>
             <ChevronRight className="w-4 h-4 text-[#9CA3AF]" />
@@ -528,10 +632,10 @@ export function PortfolioView({
           <button
             type="button"
             onClick={() => onOpenWallet('deposit')}
-            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] cursor-pointer"
+            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
           >
             <span className="inline-flex items-center gap-3">
-              <ArrowDownLeft className="w-4 h-4 text-[#2563EB]" />
+              <ArrowDownLeft className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
               <span>Deposit crypto (Binance coins)</span>
             </span>
             <ChevronRight className="w-4 h-4 text-[#9CA3AF]" />
@@ -540,10 +644,10 @@ export function PortfolioView({
           <button
             type="button"
             onClick={onOpenActivity}
-            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] cursor-pointer"
+            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
           >
             <span className="inline-flex items-center gap-3">
-              <FileText className="w-4 h-4 text-[#6B7280]" />
+              <FileText className="w-4 h-4 text-[#6B7280] dark:text-[#94A3B8]" />
               <span>Transaction history</span>
             </span>
             <ChevronRight className="w-4 h-4 text-[#9CA3AF]" />
@@ -552,11 +656,11 @@ export function PortfolioView({
           <button
             type="button"
             onClick={onOpenAccount}
-            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] cursor-pointer"
+            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
           >
             <span className="inline-flex items-center gap-3">
-              <Settings className="w-4 h-4 text-[#6B7280]" />
-              <span>Profile photo & details</span>
+              <Settings className="w-4 h-4 text-[#6B7280] dark:text-[#94A3B8]" />
+              <span>Profile photo, theme & app install</span>
             </span>
             <ChevronRight className="w-4 h-4 text-[#9CA3AF]" />
           </button>
@@ -564,7 +668,7 @@ export function PortfolioView({
           <button
             type="button"
             onClick={onSignOut}
-            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-red-700 cursor-pointer"
+            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-red-700 dark:text-red-400 cursor-pointer"
           >
             <span className="inline-flex items-center gap-3">
               <LogOut className="w-4 h-4" />
