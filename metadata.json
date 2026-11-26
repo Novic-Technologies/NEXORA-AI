@@ -1,0 +1,8 @@
+{
+  "name": "Nexora AI",
+  "description": "AI robotics fleet rental and crypto-funded investor portal for deploying autonomous machines and tracking daily yield payouts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

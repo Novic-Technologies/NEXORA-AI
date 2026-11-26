@@ -1,0 +1,256 @@
+{
+  "investors": [
+    {
+      "id": "inv_demo_nexora_01",
+      "role": "investor",
+      "accountStatus": "active",
+      "fullName": "Daniel Kigozi",
+      "email": "daniel.kigozi@nexora.ai",
+      "phone": "+256 700 418 920",
+      "companyName": "Kampala Industrial Holdings",
+      "country": "Uganda",
+      "city": "Kampala",
+      "investorType": "Individual Investor",
+      "kycStatus": "pending",
+      "verification": {
+        "documentType": "National ID",
+        "documentNumber": "CM92048105KLM",
+        "frontImageUrl": "/src/assets/images/hero_robotics_floor_1795701351020.jpg",
+        "backOrSelfieUrl": "/src/assets/images/robot_service_ai_1795701352399.jpg",
+        "sourceOfFunds": "Business Revenue & Capital Reserve",
+        "annualCapacity": "$10,000 – $50,000",
+        "financialProofNote": "Commercial bank statement attached for compliance review.",
+        "submittedAt": "2026-11-26T11:39:21.255Z"
+      },
+      "walletBalance": 4500,
+      "heldBalance": 0,
+      "totalDeposited": 5700,
+      "totalWithdrawn": 0,
+      "totalYieldCollected": 0,
+      "createdAt": "2026-11-24T14:39:21.255Z",
+      "passwordHash": "",
+      "passwordSalt": "",
+      "isDemoAccount": true
+    }
+  ],
+  "robots": [
+    {
+      "id": "nx-atlas-m4",
+      "modelCode": "NX-ATLAS-M4",
+      "name": "Atlas M4 Autonomous Mover",
+      "category": "Warehouse & Logistics",
+      "tagline": "Heavy-payload fleet rover running 24/7 autonomous fulfillment lanes.",
+      "description": "Deployed across European e-commerce hubs, the Atlas M4 integrates Nexora Vision Core for dynamic obstacle rerouting, pallet staging, and automated dock charging.",
+      "imageUrl": "/src/assets/images/robot_logistics_amr_1795701350768.jpg",
+      "rentalPrice": 1200,
+      "dailyReturnRate": 1.55,
+      "cycleDays": 45,
+      "availableUnits": 18,
+      "totalUnits": 24,
+      "facilityHub": "Munich Fulfillment Hub",
+      "specs": {
+        "neuralCore": "Nexora Vision V4 · 275 TOPS",
+        "autonomyLevel": "Level 4 Full Fleet Mesh",
+        "payloadCapacity": "650 kg continuous",
+        "uptimeSla": "99.4% verified"
+      }
+    },
+    {
+      "id": "nx-kestrel-h2",
+      "modelCode": "NX-KESTREL-H2",
+      "name": "Kestrel H2 Humanoid Worker",
+      "category": "Humanoid AI",
+      "tagline": "Bipedal AI production unit built for multi-station assembly and kitting.",
+      "description": "Kestrel H2 operates in human-scale manufacturing cells without facility retrofitting. Equipped with tactile 16-DOF hands and real-time spatial reasoning.",
+      "imageUrl": "/src/assets/images/robot_humanoid_unit_1795701351108.jpg",
+      "rentalPrice": 4800,
+      "dailyReturnRate": 1.95,
+      "cycleDays": 60,
+      "availableUnits": 9,
+      "totalUnits": 14,
+      "facilityHub": "Zurich Robotics Annex",
+      "specs": {
+        "neuralCore": "Nexora Embodied Dual-NPU",
+        "autonomyLevel": "Adaptive Task Generalist",
+        "payloadCapacity": "24 kg bimanual lift",
+        "uptimeSla": "99.1% verified"
+      }
+    },
+    {
+      "id": "nx-veridian-a7",
+      "modelCode": "NX-VERIDIAN-A7",
+      "name": "Veridian A7 Precision Arm",
+      "category": "Precision Assembly",
+      "tagline": "7-axis micron-grade AI manipulator for semiconductor and EV sub-assemblies.",
+      "description": "High-speed force-torque feedback arm executing sub-millimeter PCB placement, optical calibration, and automated cleanroom inspection cycles.",
+      "imageUrl": "/src/assets/images/robot_precision_arm_1795701352118.jpg",
+      "rentalPrice": 2600,
+      "dailyReturnRate": 1.72,
+      "cycleDays": 50,
+      "availableUnits": 14,
+      "totalUnits": 20,
+      "facilityHub": "Eindhoven Cleanroom Bay",
+      "specs": {
+        "neuralCore": "Nexora Tactile Control Core",
+        "autonomyLevel": "Closed-Loop Micro-Vision",
+        "payloadCapacity": "12 kg · ±0.02 mm",
+        "uptimeSla": "99.7% verified"
+      }
+    },
+    {
+      "id": "nx-sentinel-q4",
+      "modelCode": "NX-SENTINEL-Q4",
+      "name": "Sentinel Q4 Inspection Scout",
+      "category": "Autonomous Inspection",
+      "tagline": "All-terrain quadruped AI unit auditing energy grids and industrial plants.",
+      "description": "Climbs industrial stairways and inspects substations with LiDAR mapping, thermal anomaly detection, and acoustic leak diagnostics under commercial contracts.",
+      "imageUrl": "/src/assets/images/robot_quadruped_scout_1795701352026.jpg",
+      "rentalPrice": 3200,
+      "dailyReturnRate": 1.8,
+      "cycleDays": 55,
+      "availableUnits": 11,
+      "totalUnits": 16,
+      "facilityHub": "Rotterdam Energy Terminal",
+      "specs": {
+        "neuralCore": "Nexora Edge-LiDAR Fusion",
+        "autonomyLevel": "Autonomous Patrol & Alert",
+        "payloadCapacity": "18 kg sensor suite",
+        "uptimeSla": "99.2% verified"
+      }
+    },
+    {
+      "id": "nx-aura-s3",
+      "modelCode": "NX-AURA-S3",
+      "name": "Aura S3 Service Concierge",
+      "category": "Service & Agri",
+      "tagline": "Conversational AI hospitality and clinical corridor delivery robot.",
+      "description": "Operates inside partner airports, medical campuses, and corporate towers handling autonomous reception, badge verification, and sterile parcel runs.",
+      "imageUrl": "/src/assets/images/robot_service_ai_1795701352399.jpg",
+      "rentalPrice": 950,
+      "dailyReturnRate": 1.42,
+      "cycleDays": 35,
+      "availableUnits": 22,
+      "totalUnits": 30,
+      "facilityHub": "London Canary Wharf",
+      "specs": {
+        "neuralCore": "Nexora Multimodal Voice AI",
+        "autonomyLevel": "Elevator & Crowd Nav",
+        "payloadCapacity": "40 kg locked bay",
+        "uptimeSla": "99.5% verified"
+      }
+    },
+    {
+      "id": "nx-terra-g8",
+      "modelCode": "NX-TERRA-G8",
+      "name": "Terra G8 Agri-Vision Rover",
+      "category": "Service & Agri",
+      "tagline": "Solar-assisted greenhouse AI harvester with ripeness computer vision.",
+      "description": "Continuous precision harvesting and canopy health telemetry across high-yield vertical farms under multi-year produce partner leases.",
+      "imageUrl": "/src/assets/images/robot_agri_drone_1795701353223.jpg",
+      "rentalPrice": 1850,
+      "dailyReturnRate": 1.6,
+      "cycleDays": 45,
+      "availableUnits": 15,
+      "totalUnits": 18,
+      "facilityHub": "Almeria Agro-Tech Park",
+      "specs": {
+        "neuralCore": "Nexora Multispectral Vision",
+        "autonomyLevel": "24h Greenhouse Mesh",
+        "payloadCapacity": "120 kg harvest bin",
+        "uptimeSla": "99.0% verified"
+      }
+    }
+  ],
+  "rentals": [
+    {
+      "id": "rnt_demo_atlas_01",
+      "investorId": "inv_demo_nexora_01",
+      "robotId": "nx-atlas-m4",
+      "robotName": "Atlas M4 Autonomous Mover",
+      "robotModelCode": "NX-ATLAS-M4",
+      "robotImageUrl": "/src/assets/images/robot_logistics_amr_1795701350768.jpg",
+      "facilityHub": "Munich Fulfillment Hub",
+      "quantity": 1,
+      "unitPrice": 1200,
+      "totalCost": 1200,
+      "dailyReturnRate": 1.55,
+      "dailyPayout": 18.6,
+      "cycleDays": 45,
+      "simulatedDaysElapsed": 0,
+      "collectedYield": 0,
+      "status": "active",
+      "rentedAt": "2026-11-24T14:39:21.255Z",
+      "lastClaimedAt": null
+    }
+  ],
+  "transactions": [
+    {
+      "id": "tx_demo_pending_01",
+      "investorId": "inv_demo_nexora_01",
+      "investorName": "Daniel Kigozi",
+      "investorEmail": "daniel.kigozi@nexora.ai",
+      "type": "deposit",
+      "amount": 2400,
+      "status": "pending",
+      "coinSymbol": "USDT",
+      "networkCode": "TRC20",
+      "networkName": "TRON (TRC20)",
+      "walletAddress": "TX9K4vP7mR2sE8wQ1zL6nB3cV5xY8dF2aG9",
+      "txHash": "4f8d2a7c9e1b3056a2c4f6e8d0b1a3c5e7f902468ace13579bdf0123456789ab",
+      "reference": "USDT Deposit · TRON (TRC20)",
+      "createdAt": "2026-11-26T11:39:21.255Z"
+    },
+    {
+      "id": "tx_demo_rnt_01",
+      "investorId": "inv_demo_nexora_01",
+      "investorName": "Daniel Kigozi",
+      "investorEmail": "daniel.kigozi@nexora.ai",
+      "type": "rental",
+      "amount": 1200,
+      "status": "completed",
+      "reference": "Rented 1x Atlas M4 Autonomous Mover (45d cycle)",
+      "createdAt": "2026-11-25T14:39:21.255Z"
+    },
+    {
+      "id": "tx_demo_dep_01",
+      "investorId": "inv_demo_nexora_01",
+      "investorName": "Daniel Kigozi",
+      "investorEmail": "daniel.kigozi@nexora.ai",
+      "type": "deposit",
+      "amount": 5700,
+      "status": "completed",
+      "coinSymbol": "USDT",
+      "networkCode": "BEP20",
+      "networkName": "BNB Smart Chain (BEP20)",
+      "walletAddress": "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+      "txHash": "0x9a4f8b21c6e71234d9e8a7123c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e",
+      "reference": "USDT Deposit · BNB Smart Chain (BEP20)",
+      "reviewedBy": "System Settlement",
+      "reviewedAt": "2026-11-24T14:39:21.255Z",
+      "createdAt": "2026-11-24T14:39:21.255Z"
+    }
+  ],
+  "dispatches": [
+    {
+      "id": "disp-01",
+      "category": "Deployment",
+      "publishedAt": "Nov 2026",
+      "title": "18 additional Atlas M4 units commissioned in Munich logistics bays",
+      "summary": "Expanded throughput contracts with regional parcel carriers lifted fleet utilization above 96% across Q4."
+    },
+    {
+      "id": "disp-02",
+      "category": "Hardware",
+      "publishedAt": "Nov 2026",
+      "title": "Kestrel H2 firmware 4.2 cuts bimanual pick cycle latency by 22%",
+      "summary": "Over-the-air embodied neural updates are now live across all Zurich assembly units without halting shift hours."
+    },
+    {
+      "id": "disp-03",
+      "category": "Settlement",
+      "publishedAt": "Oct 2026",
+      "title": "Binance multi-network settlement live across 8 major cryptocurrencies",
+      "summary": "Treasury settlement desk now reviews USDT, USDC, BNB, BTC, ETH, SOL, XRP, and TRX deposits and withdrawals."
+    }
+  ]
+}
