@@ -561,7 +561,7 @@ async function startServer() {
         supportedCoins: db.cryptoCoins.length,
         verifiedInvestors: db.investors.filter((i) => i.kycStatus === 'verified').length,
       },
-      featuredRobots: db.robots.slice(0, 4),
+      featuredRobots: db.robots.slice(0, 8),
       dispatches: db.dispatches,
       cryptoCoins: db.cryptoCoins,
     });
@@ -1248,6 +1248,10 @@ async function startServer() {
       res.status(400).json({
         error: 'XRP Ledger withdrawals require a numeric Destination Tag / Memo.',
       });
+      return;
+    }
+    if (memo && memo.length > 64) {
+      res.status(400).json({ error: 'Destination memo / tag must be 64 characters or fewer.' });
       return;
     }
 

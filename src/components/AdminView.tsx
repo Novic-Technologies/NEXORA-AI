@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -17,6 +17,7 @@ import {
   KeyRound,
   Megaphone,
   Plus,
+  RefreshCw,
   Search,
   Trash2,
   Upload,
@@ -207,20 +208,51 @@ export function AdminView({
     setFeedback(null);
   };
 
-  const syncCryptoFields = (symbol: BinanceCoinSymbol, net: BinanceNetworkCode) => {
-    const coins = data?.cryptoCoins ?? [];
-    const c = coins.find((x) => x.symbol === symbol) ?? coins[0];
-    if (!c) return;
-    const n = c.networks.find((x) => x.networkCode === net) ?? c.networks[0];
-    if (!n) return;
-    setCoinSymbol(c.symbol);
-    setNetworkCode(n.networkCode);
-    setCoinAddress(n.depositAddress);
-    setCoinMemo(n.memo || '');
-    setCoinMinDep(String(n.minDepositUsd));
-    setCoinMinWith(String(n.minWithdrawUsd));
-    setCoinFee(String(n.withdrawFeeUsd));
-  };
+  const syncCryptoFields = useCallback(
+    (symbol: BinanceCoinSymbol, net: BinanceNetworkCode) => {
+      const coins = data?.cryptoCoins ?? [];
+      const c = coins.find((x) => x.symbol === symbol) ?? coins[0];
+      if (!c) return;
+      const n = c.networks.find((x) => x.networkCode === net) ?? c.networks[0];
+      if (!n) return;
+      setCoinSymbol(c.symbol);
+      setNetworkCode(n.networkCode);
+      setCoinAddress(n.depositAddress);
+      setCoinMemo(n.memo || '');
+      setCoinMinDep(String(n.minDepositUsd));
+      setCoinMinWith(String(n.minWithdrawUsd));
+      setCoinFee(String(n.withdrawFeeUsd));
+    },
+    [data?.cryptoCoins]
+  );
+
+  useEffect(() => {
+    if (data?.siteConfig && !siteDraft) {
+      setSiteDraft(data.siteConfig);
+    }
+  }, [data?.siteConfig, siteDraft]);
+
+  useEffect(() => {
+    if (data?.cryptoCoins && data.cryptoCoins.length > 0 && !coinAddress) {
+      syncCryptoFields(coinSymbol, networkCode);
+    }
+  }, [data?.cryptoCoins, coinAddress, coinSymbol, networkCode, syncCryptoFields]);
+
+  useEffect(() => {
+    if (!previewImg && !robotModalOpen && !editingUser && !pwResetModal && !showCreateUser) {
+      return;
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (previewImg) setPreviewImg(null);
+      else if (robotModalOpen) setRobotModalOpen(false);
+      else if (editingUser) setEditingUser(null);
+      else if (pwResetModal) setPwResetModal(null);
+      else if (showCreateUser) setShowCreateUser(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewImg, robotModalOpen, editingUser, pwResetModal, showCreateUser]);
 
   const openEditUser = (u: InvestorProfile) => {
     setEditingUser(u);
@@ -288,6 +320,7 @@ export function AdminView({
     setter: (val: string) => void
   ) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     try {
       const compressed = await compressImageToDataUrl(file, 960, 0.82);
@@ -743,10 +776,12 @@ export function AdminView({
         </div>
         <button
           type="button"
+          disabled={loading}
           onClick={() => void onRefresh()}
-          className="px-2.5 py-1.5 rounded-lg border border-[#E5E7EB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#1E293B] text-[11px] font-semibold text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
+          className="px-2.5 py-1.5 rounded-lg border border-[#E5E7EB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#1E293B] text-[11px] font-semibold text-[#111827] dark:text-[#F8FAFC] inline-flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
         >
-          Refresh
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>{loading ? 'Syncing' : 'Refresh'}</span>
         </button>
       </header>
 
@@ -1363,6 +1398,7 @@ export function AdminView({
                           setNotifTarget(u.id);
                           setTab('cms');
                           if (data?.siteConfig && !siteDraft) setSiteDraft(data.siteConfig);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
                         className="h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] text-[11px] font-semibold text-[#2563EB] dark:text-[#60A5FA] inline-flex items-center gap-1 cursor-pointer"
                       >
@@ -1889,6 +1925,19 @@ export function AdminView({
                   />
                 </div>
 
+                <div>
+                  <label className="block text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
+                    Destination Tag / Memo (XRP, XLM, TON)
+                  </label>
+                  <input
+                    type="text"
+                    value={coinMemo}
+                    onChange={(e) => setCoinMemo(e.target.value)}
+                    placeholder="Optional memo or destination tag"
+                    className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-[11px] text-[#111827] dark:text-[#F8FAFC]"
+                  />
+                </div>
+
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="block text-[10px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
@@ -2069,11 +2118,13 @@ export function AdminView({
       {/* Create User Modal */}
       {showCreateUser && (
         <div
+          onClick={() => setShowCreateUser(false)}
           className="fixed inset-0 z-50 bg-black/70 flex items-end justify-center"
           role="dialog"
           aria-modal="true"
         >
           <form
+            onClick={(e) => e.stopPropagation()}
             onSubmit={handleCreateUser}
             className="w-full max-w-[430px] max-h-[88dvh] overflow-y-auto bg-white dark:bg-[#111827] border-t border-[#E5E7EB] dark:border-[#1E293B] rounded-t-3xl p-5 space-y-3"
           >
@@ -2206,11 +2257,13 @@ export function AdminView({
       {/* Technical Department Password Reset Modal */}
       {pwResetModal && (
         <div
+          onClick={() => setPwResetModal(null)}
           className="fixed inset-0 z-50 bg-black/70 flex items-end justify-center"
           role="dialog"
           aria-modal="true"
         >
           <form
+            onClick={(e) => e.stopPropagation()}
             onSubmit={handleTechPasswordReset}
             className="w-full max-w-[430px] bg-white dark:bg-[#111827] border-t border-[#E5E7EB] dark:border-[#1E293B] rounded-t-3xl p-5 space-y-3"
           >
@@ -2285,11 +2338,13 @@ export function AdminView({
       {/* Edit User Modal */}
       {editingUser && (
         <div
+          onClick={() => setEditingUser(null)}
           className="fixed inset-0 z-50 bg-black/70 flex items-end justify-center"
           role="dialog"
           aria-modal="true"
         >
           <form
+            onClick={(e) => e.stopPropagation()}
             onSubmit={handleSaveUserEdit}
             className="w-full max-w-[430px] max-h-[90dvh] overflow-y-auto bg-white dark:bg-[#111827] border-t border-[#E5E7EB] dark:border-[#1E293B] rounded-t-3xl p-5 space-y-3"
           >
@@ -2502,11 +2557,13 @@ export function AdminView({
       {/* Create / Edit Robot Modal */}
       {robotModalOpen && (
         <div
+          onClick={() => setRobotModalOpen(false)}
           className="fixed inset-0 z-50 bg-black/70 flex items-end justify-center"
           role="dialog"
           aria-modal="true"
         >
           <form
+            onClick={(e) => e.stopPropagation()}
             onSubmit={handleSaveRobot}
             className="w-full max-w-[430px] max-h-[90dvh] overflow-y-auto bg-white dark:bg-[#111827] border-t border-[#E5E7EB] dark:border-[#1E293B] rounded-t-3xl p-5 space-y-3"
           >
@@ -2695,11 +2752,15 @@ export function AdminView({
       {/* Document / Screenshot Lightbox */}
       {previewImg && (
         <div
+          onClick={() => setPreviewImg(null)}
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-[400px] bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl overflow-hidden">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[400px] bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl overflow-hidden"
+          >
             <div className="px-4 py-3 border-b border-[#E5E7EB] dark:border-[#1E293B] flex items-center justify-between">
               <p className="text-xs font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
                 {previewImg.title}

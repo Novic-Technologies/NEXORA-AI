@@ -1,0 +1,1024 @@
+{
+  "investors": [
+    {
+      "id": "inv_ops_1232c870",
+      "role": "master_admin",
+      "department": "Executive Operations",
+      "accountStatus": "active",
+      "fullName": "Nexora Operations Director",
+      "email": "novictechnologies@gmail.com",
+      "phone": "+41 44 580 1200",
+      "companyName": "Nexora AI Corporate Operations",
+      "country": "Switzerland",
+      "city": "Zurich",
+      "investorType": "Institutional Fund",
+      "kycStatus": "verified",
+      "walletBalance": 0,
+      "heldBalance": 0,
+      "totalDeposited": 0,
+      "totalWithdrawn": 0,
+      "totalYieldCollected": 0,
+      "referralCode": "NX-NEX875",
+      "referralBonusEarned": 0,
+      "hasApprovedDeposit": false,
+      "createdAt": "2026-11-27T08:02:42.956Z",
+      "passwordHash": "19158a8311c7aa2de8c6a05a96fee082068f4b03f803ad8a5b0c728a2a28fb3f36675b82b6a49c1212ead7ff432097f1a8cc89047790568919ec3ef0b122e7da",
+      "passwordSalt": "77da2854afa8b3904a7234ca5c3d6142"
+    }
+  ],
+  "robots": [
+    {
+      "id": "nx-atlas-m4",
+      "modelCode": "NX-ATLAS-M4",
+      "name": "Atlas M4 Autonomous Mover",
+      "category": "Warehouse & Logistics",
+      "tagline": "Heavy-payload fleet rover running 24/7 autonomous fulfillment lanes.",
+      "description": "Deployed across European e-commerce hubs, the Atlas M4 integrates Nexora Vision Core for dynamic obstacle rerouting, pallet staging, and automated dock charging.",
+      "imageUrl": "/src/assets/images/robot_logistics_amr_1795701350768.jpg",
+      "rentalPrice": 1200,
+      "dailyReturnRate": 1.55,
+      "cycleDays": 45,
+      "availableUnits": 18,
+      "totalUnits": 24,
+      "facilityHub": "Munich Fulfillment Hub",
+      "referralBonusUsd": 66,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Vision V4 · 275 TOPS",
+        "autonomyLevel": "Level 4 Full Fleet Mesh",
+        "payloadCapacity": "650 kg continuous",
+        "uptimeSla": "99.4% verified"
+      }
+    },
+    {
+      "id": "nx-veridian-a7",
+      "modelCode": "NX-VERIDIAN-A7",
+      "name": "Veridian A7 Precision Arm",
+      "category": "Precision Assembly",
+      "tagline": "7-axis micron-grade AI manipulator for semiconductor and EV sub-assemblies.",
+      "description": "High-speed force-torque feedback arm executing sub-millimeter PCB placement, optical calibration, and automated cleanroom inspection cycles.",
+      "imageUrl": "/src/assets/images/robot_precision_arm_1795701352118.jpg",
+      "rentalPrice": 2600,
+      "dailyReturnRate": 1.72,
+      "cycleDays": 50,
+      "availableUnits": 14,
+      "totalUnits": 20,
+      "facilityHub": "Eindhoven Cleanroom Bay",
+      "referralBonusUsd": 143,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Tactile Control Core",
+        "autonomyLevel": "Closed-Loop Micro-Vision",
+        "payloadCapacity": "12 kg · ±0.02 mm",
+        "uptimeSla": "99.7% verified"
+      }
+    },
+    {
+      "id": "nx-kestrel-h2",
+      "modelCode": "NX-KESTREL-H2",
+      "name": "Kestrel H2 Humanoid Worker",
+      "category": "Humanoid AI",
+      "tagline": "Bipedal AI production unit built for multi-station assembly and kitting.",
+      "description": "Kestrel H2 operates in human-scale manufacturing cells without facility retrofitting. Equipped with tactile 16-DOF hands and real-time spatial reasoning.",
+      "imageUrl": "/src/assets/images/robot_humanoid_unit_1795701351108.jpg",
+      "rentalPrice": 4800,
+      "dailyReturnRate": 1.95,
+      "cycleDays": 60,
+      "availableUnits": 9,
+      "totalUnits": 14,
+      "facilityHub": "Zurich Robotics Annex",
+      "referralBonusUsd": 264,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Embodied Dual-NPU",
+        "autonomyLevel": "Adaptive Task Generalist",
+        "payloadCapacity": "24 kg bimanual lift",
+        "uptimeSla": "99.1% verified"
+      }
+    },
+    {
+      "id": "nx-sentinel-q4",
+      "modelCode": "NX-SENTINEL-Q4",
+      "name": "Sentinel Q4 Inspection Scout",
+      "category": "Autonomous Inspection",
+      "tagline": "All-terrain quadruped AI unit auditing energy grids and industrial plants.",
+      "description": "Climbs industrial stairways and inspects substations with LiDAR mapping, thermal anomaly detection, and acoustic leak diagnostics under commercial contracts.",
+      "imageUrl": "/src/assets/images/robot_quadruped_scout_1795701352026.jpg",
+      "rentalPrice": 3200,
+      "dailyReturnRate": 1.8,
+      "cycleDays": 55,
+      "availableUnits": 11,
+      "totalUnits": 16,
+      "facilityHub": "Rotterdam Energy Terminal",
+      "referralBonusUsd": 176,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Edge-LiDAR Fusion",
+        "autonomyLevel": "Autonomous Patrol & Alert",
+        "payloadCapacity": "18 kg sensor suite",
+        "uptimeSla": "99.2% verified"
+      }
+    },
+    {
+      "id": "nx-aura-s3",
+      "modelCode": "NX-AURA-S3",
+      "name": "Aura S3 Service Concierge",
+      "category": "Service & Agri",
+      "tagline": "Conversational AI hospitality and clinical corridor delivery robot.",
+      "description": "Operates inside partner airports, medical campuses, and corporate towers handling autonomous reception, badge verification, and sterile parcel runs.",
+      "imageUrl": "/src/assets/images/robot_service_ai_1795701352399.jpg",
+      "rentalPrice": 950,
+      "dailyReturnRate": 1.42,
+      "cycleDays": 35,
+      "availableUnits": 22,
+      "totalUnits": 30,
+      "facilityHub": "London Canary Wharf",
+      "referralBonusUsd": 52.25,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Multimodal Voice AI",
+        "autonomyLevel": "Elevator & Crowd Nav",
+        "payloadCapacity": "40 kg locked bay",
+        "uptimeSla": "99.5% verified"
+      }
+    },
+    {
+      "id": "nx-terra-g8",
+      "modelCode": "NX-TERRA-G8",
+      "name": "Terra G8 Agri-Vision Rover",
+      "category": "Service & Agri",
+      "tagline": "Solar-assisted greenhouse AI harvester with ripeness computer vision.",
+      "description": "Continuous precision harvesting and canopy health telemetry across high-yield vertical farms under multi-year produce partner leases.",
+      "imageUrl": "/src/assets/images/robot_agri_drone_1795701353223.jpg",
+      "rentalPrice": 1850,
+      "dailyReturnRate": 1.6,
+      "cycleDays": 45,
+      "availableUnits": 15,
+      "totalUnits": 18,
+      "facilityHub": "Almeria Agro-Tech Park",
+      "referralBonusUsd": 101.75,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Multispectral Vision",
+        "autonomyLevel": "24h Greenhouse Mesh",
+        "payloadCapacity": "120 kg harvest bin",
+        "uptimeSla": "99.0% verified"
+      }
+    },
+    {
+      "id": "nx-titan-f9",
+      "modelCode": "NX-TITAN-F9",
+      "name": "Titan F9 Autonomous Pallet AGV",
+      "category": "Warehouse & Logistics",
+      "tagline": "Heavy-lift autonomous electric pallet stacker for high-bay distribution hubs.",
+      "description": "Operates 24/7 in cold-chain and port logistics bays with 3D LiDAR fork alignment, predictive fleet traffic routing, and automated opportunity charging.",
+      "imageUrl": "/src/assets/images/robot_forklift_agv_1795770658231.jpg",
+      "rentalPrice": 5400,
+      "dailyReturnRate": 2.02,
+      "cycleDays": 60,
+      "availableUnits": 10,
+      "totalUnits": 14,
+      "facilityHub": "Hamburg Port Logistics",
+      "referralBonusUsd": 297,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Heavy Fleet V5",
+        "autonomyLevel": "Level 4 Dock-to-Rack",
+        "payloadCapacity": "1,800 kg pallet lift",
+        "uptimeSla": "99.5% verified"
+      }
+    },
+    {
+      "id": "nx-delta-s6",
+      "modelCode": "NX-DELTA-S6",
+      "name": "Delta S6 Optical Sorting Gantry",
+      "category": "Warehouse & Logistics",
+      "tagline": "High-velocity delta vision cell sorting 140 parcels per minute.",
+      "description": "Carbon-fiber parallel kinematic arms paired with overhead stereo vision classify, orient, and route e-commerce parcels with near-zero missort rate.",
+      "imageUrl": "/src/assets/images/robot_sorting_gantry_1795770659036.jpg",
+      "rentalPrice": 2100,
+      "dailyReturnRate": 1.68,
+      "cycleDays": 45,
+      "availableUnits": 16,
+      "totalUnits": 20,
+      "facilityHub": "Singapore Tuas Mega Hub",
+      "referralBonusUsd": 115.5,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora High-Speed Vision",
+        "autonomyLevel": "Continuous Line Sync",
+        "payloadCapacity": "6 kg @ 140 picks/min",
+        "uptimeSla": "99.6% verified"
+      }
+    },
+    {
+      "id": "nx-volt-w5",
+      "modelCode": "NX-VOLT-W5",
+      "name": "Volt W5 Laser Welding Cobot",
+      "category": "Precision Assembly",
+      "tagline": "6-axis AI seam-tracking welder and CNC tending fabrication cell.",
+      "description": "Real-time laser weld-pool telemetry automatically adjusts feed speed and torch angle across EV battery trays and aerospace structural frames.",
+      "imageUrl": "/src/assets/images/robot_welding_cobot_1795770656337.jpg",
+      "rentalPrice": 3650,
+      "dailyReturnRate": 1.84,
+      "cycleDays": 55,
+      "availableUnits": 12,
+      "totalUnits": 16,
+      "facilityHub": "Stuttgart Auto-Tech Line",
+      "referralBonusUsd": 200.75,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Thermal Seam AI",
+        "autonomyLevel": "Adaptive Path Correction",
+        "payloadCapacity": "25 kg · ±0.03 mm",
+        "uptimeSla": "99.4% verified"
+      }
+    },
+    {
+      "id": "nx-lumina-c1",
+      "modelCode": "NX-LUMINA-C1",
+      "name": "Lumina C1 Cleanroom Dual-Arm",
+      "category": "Precision Assembly",
+      "tagline": "ISO-Class 3 semiconductor wafer and biopharma compounding manipulator.",
+      "description": "Dual ceramic-titanium arms execute sterile micro-assembly, optical wafer transfer, and automated QA metrology inside partner fabrication labs.",
+      "imageUrl": "/src/assets/images/robot_cleanroom_wafer_1795770657308.jpg",
+      "rentalPrice": 7800,
+      "dailyReturnRate": 2.18,
+      "cycleDays": 75,
+      "availableUnits": 7,
+      "totalUnits": 10,
+      "facilityHub": "Leuven Silicon Cleanroom",
+      "referralBonusUsd": 429,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Sub-Micron Dual Core",
+        "autonomyLevel": "ISO-3 Autonomous Fab",
+        "payloadCapacity": "10 kg · ±0.008 mm",
+        "uptimeSla": "99.8% verified"
+      }
+    },
+    {
+      "id": "nx-aero-v3",
+      "modelCode": "NX-AERO-V3",
+      "name": "Aero V3 LiDAR Inspection Drone",
+      "category": "Autonomous Inspection",
+      "tagline": "Shrouded autonomous UAV performing structural and wind-turbine audits.",
+      "description": "Launches from automated docking pods to map storage silos, offshore substations, and warehouse roofs using solid-state LiDAR and RGB-thermal fusion.",
+      "imageUrl": "/src/assets/images/robot_aerial_inspector_1795770659062.jpg",
+      "rentalPrice": 1450,
+      "dailyReturnRate": 1.58,
+      "cycleDays": 40,
+      "availableUnits": 19,
+      "totalUnits": 24,
+      "facilityHub": "Aberdeen Offshore Grid",
+      "referralBonusUsd": 79.75,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Aero-SLAM V3",
+        "autonomyLevel": "Beyond-Visual Flight",
+        "payloadCapacity": "4.5 kg LiDAR pod",
+        "uptimeSla": "99.1% verified"
+      }
+    },
+    {
+      "id": "nx-aegis-r6",
+      "modelCode": "NX-AEGIS-R6",
+      "name": "Aegis R6 Perimeter Patrol Rover",
+      "category": "Autonomous Inspection",
+      "tagline": "6-wheel thermal & acoustic surveillance unit for hyperscale data campuses.",
+      "description": "Continuously patrols critical cloud infrastructure yards, identifying perimeter anomalies, thermal hotspots, and badge compliance without blind spots.",
+      "imageUrl": "/src/assets/images/robot_security_rover_1795770659229.jpg",
+      "rentalPrice": 2950,
+      "dailyReturnRate": 1.76,
+      "cycleDays": 50,
+      "availableUnits": 13,
+      "totalUnits": 18,
+      "facilityHub": "Frankfurt Data Campus",
+      "referralBonusUsd": 162.25,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Sentinel Vision",
+        "autonomyLevel": "24/7 Campus Patrol",
+        "payloadCapacity": "360° Mast + 35 kg bay",
+        "uptimeSla": "99.5% verified"
+      }
+    },
+    {
+      "id": "nx-nexus-h4",
+      "modelCode": "NX-NEXUS-H4",
+      "name": "Nexus H4 Bipedal Cargo Humanoid",
+      "category": "Humanoid AI",
+      "tagline": "High-torque humanoid worker built for multi-shift tote loading and kitting.",
+      "description": "Trained on 10M+ manipulation hours, Nexus H4 bridges narrow aisles, climbs loading ramps, and operates standard industrial carts autonomously.",
+      "imageUrl": "/src/assets/images/robot_humanoid_unit_1795701351108.jpg",
+      "rentalPrice": 6200,
+      "dailyReturnRate": 2.08,
+      "cycleDays": 65,
+      "availableUnits": 8,
+      "totalUnits": 12,
+      "facilityHub": "Tokyo Haneda Cargo Bay",
+      "referralBonusUsd": 341,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Embodied Gen-4",
+        "autonomyLevel": "Whole-Body Loco-Manip",
+        "payloadCapacity": "30 kg dynamic carry",
+        "uptimeSla": "99.2% verified"
+      }
+    },
+    {
+      "id": "nx-nano-p2",
+      "modelCode": "NX-NANO-P2",
+      "name": "Nano P2 Micro-Assembly Arm",
+      "category": "Precision Assembly",
+      "tagline": "Entry-tier benchtop precision cobot for electronics QA and testing.",
+      "description": "Compact 6-axis benchtop unit running automated smartphone display testing, connector insertion, and vision-guided micro-soldering.",
+      "imageUrl": "/src/assets/images/robot_precision_arm_1795701352118.jpg",
+      "rentalPrice": 650,
+      "dailyReturnRate": 1.38,
+      "cycleDays": 30,
+      "availableUnits": 28,
+      "totalUnits": 36,
+      "facilityHub": "Seoul Digital Foundry",
+      "referralBonusUsd": 35.75,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Micro-Vision Lite",
+        "autonomyLevel": "Supervised Cell Mesh",
+        "payloadCapacity": "5 kg · ±0.02 mm",
+        "uptimeSla": "99.6% verified"
+      }
+    },
+    {
+      "id": "nx-cargo-x8",
+      "modelCode": "NX-CARGO-X8",
+      "name": "Cargo X8 Cross-Dock Shuttle",
+      "category": "Warehouse & Logistics",
+      "tagline": "High-throughput freight shuttle synchronizing container unloading docks.",
+      "description": "Coordinates in swarms of up to 40 rovers to stage cross-dock freight pallets directly onto outbound autonomous carrier bays.",
+      "imageUrl": "/src/assets/images/robot_forklift_agv_1795770658231.jpg",
+      "rentalPrice": 3900,
+      "dailyReturnRate": 1.88,
+      "cycleDays": 55,
+      "availableUnits": 11,
+      "totalUnits": 15,
+      "facilityHub": "Antwerp Freight Terminal",
+      "referralBonusUsd": 214.5,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Swarm Router V4",
+        "autonomyLevel": "Multi-Agent Dock Sync",
+        "payloadCapacity": "1,400 kg deck load",
+        "uptimeSla": "99.4% verified"
+      }
+    },
+    {
+      "id": "nx-orion-q7",
+      "modelCode": "NX-ORION-Q7",
+      "name": "Orion Q7 Subterranean Quadruped",
+      "category": "Autonomous Inspection",
+      "tagline": "IP67 sealed quadruped AI inspector for utility tunnels and rail vaults.",
+      "description": "Navigates wet industrial gratings, measures gas telemetry, and streams 3D point clouds from confined infrastructure corridors.",
+      "imageUrl": "/src/assets/images/robot_quadruped_scout_1795701352026.jpg",
+      "rentalPrice": 4200,
+      "dailyReturnRate": 1.9,
+      "cycleDays": 60,
+      "availableUnits": 9,
+      "totalUnits": 12,
+      "facilityHub": "Oslo Subsea Utility",
+      "referralBonusUsd": 231,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Rugged SLAM",
+        "autonomyLevel": "GPS-Denied Tunnel Nav",
+        "payloadCapacity": "22 kg waterproof rig",
+        "uptimeSla": "99.1% verified"
+      }
+    },
+    {
+      "id": "nx-helios-d5",
+      "modelCode": "NX-HELIOS-D5",
+      "name": "Helios D5 Solar & Greenhouse Unit",
+      "category": "Service & Agri",
+      "tagline": "Dual-role arid greenhouse cultivator and solar panel dry-cleaning rover.",
+      "description": "Operates along desert solar arrays and controlled-environment vertical farms with automated dust diagnostics and yield forecasting.",
+      "imageUrl": "/src/assets/images/robot_agri_drone_1795701353223.jpg",
+      "rentalPrice": 1150,
+      "dailyReturnRate": 1.5,
+      "cycleDays": 40,
+      "availableUnits": 20,
+      "totalUnits": 26,
+      "facilityHub": "Dubai Clean Energy Park",
+      "referralBonusUsd": 63.25,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora Solar Telemetry AI",
+        "autonomyLevel": "Day/Night Auto-Dock",
+        "payloadCapacity": "90 kg utility deck",
+        "uptimeSla": "99.3% verified"
+      }
+    },
+    {
+      "id": "nx-vertex-m9",
+      "modelCode": "NX-VERTEX-M9",
+      "name": "Vertex M9 Pharma Automation Cell",
+      "category": "Precision Assembly",
+      "tagline": "Institutional-grade sterile blister inspection and robotic vial handling cell.",
+      "description": "Flagship long-horizon contract unit deployed inside European GMP pharmaceutical logistics facilities with triple-redundant optical validation.",
+      "imageUrl": "/src/assets/images/robot_cleanroom_wafer_1795770657308.jpg",
+      "rentalPrice": 10500,
+      "dailyReturnRate": 2.35,
+      "cycleDays": 90,
+      "availableUnits": 5,
+      "totalUnits": 8,
+      "facilityHub": "Basel Bio-Automation Wing",
+      "referralBonusUsd": 577.5,
+      "doubleYieldEligible": true,
+      "specs": {
+        "neuralCore": "Nexora GMP Dual-Redundant",
+        "autonomyLevel": "Full Sterile Cell Ops",
+        "payloadCapacity": "16 kg · 24/7 validated",
+        "uptimeSla": "99.9% verified"
+      }
+    }
+  ],
+  "rentals": [],
+  "transactions": [],
+  "dispatches": [
+    {
+      "id": "disp-01",
+      "category": "Deployment",
+      "publishedAt": "Nov 2026",
+      "title": "18 additional Atlas M4 units commissioned in Munich logistics bays",
+      "summary": "Expanded throughput contracts with regional parcel carriers lifted fleet utilization above 96% across Q4.",
+      "imageUrl": "/src/assets/images/hero_robotics_floor_1795701351020.jpg"
+    },
+    {
+      "id": "disp-02",
+      "category": "Hardware",
+      "publishedAt": "Nov 2026",
+      "title": "Kestrel H2 firmware 4.2 cuts bimanual pick cycle latency by 22%",
+      "summary": "Over-the-air embodied neural updates are now live across all Zurich assembly units without halting shift hours.",
+      "imageUrl": "/src/assets/images/robot_humanoid_unit_1795701351108.jpg"
+    },
+    {
+      "id": "disp-03",
+      "category": "Settlement",
+      "publishedAt": "Oct 2026",
+      "title": "Binance multi-network settlement live across 8 major cryptocurrencies",
+      "summary": "Treasury settlement desk now reviews USDT, USDC, BNB, BTC, ETH, SOL, XRP, and TRX deposits and withdrawals.",
+      "imageUrl": "/src/assets/images/robot_logistics_amr_1795701350768.jpg"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "ntf_7c9ccd94-6b4",
+      "userId": "inv_ops_1232c870",
+      "title": "Withdrawas",
+      "message": "Dear Investor, Withdraws now land your wallet within 12 hours, not 73 hours! Nexora is improving!",
+      "category": "admin",
+      "read": true,
+      "actionScreen": "home",
+      "createdAt": "2026-11-27T08:16:20.590Z"
+    }
+  ],
+  "passwordResetRequests": [],
+  "cryptoCoins": [
+    {
+      "symbol": "USDT",
+      "name": "TetherUS",
+      "badgeColor": "#0E9F6E",
+      "networks": [
+        {
+          "networkCode": "TRC20",
+          "networkName": "TRON (TRC20)",
+          "depositAddress": "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 1,
+          "confirmations": "19 confirmations · ~1 min",
+          "addressHint": "TRON address starting with T (34 characters)"
+        },
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BSC/EVM address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "ERC20",
+          "networkName": "Ethereum (ERC20)",
+          "depositAddress": "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+          "minDepositUsd": 100,
+          "minWithdrawUsd": 50,
+          "withdrawFeeUsd": 5.5,
+          "confirmations": "12 confirmations · ~3 min",
+          "addressHint": "Ethereum address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "SOL",
+          "networkName": "Solana",
+          "depositAddress": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.5,
+          "confirmations": "32 confirmations · ~15 sec",
+          "addressHint": "Solana Base58 address (32–44 characters)"
+        },
+        {
+          "networkCode": "TON",
+          "networkName": "The Open Network (TON)",
+          "depositAddress": "UQBx7f8pM4W6Z2kQ9rJ7P3wS8yH5L9mK2N4tR6vX1aBcD3eF",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.25,
+          "confirmations": "1 block · ~10 sec",
+          "addressHint": "TON address starting with EQ or UQ (48 characters)"
+        },
+        {
+          "networkCode": "POLYGON",
+          "networkName": "Polygon POS",
+          "depositAddress": "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.25,
+          "confirmations": "64 confirmations · ~1 min",
+          "addressHint": "Polygon/EVM address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "badgeColor": "#2563EB",
+      "networks": [
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x9B3a54D092f1e882A4F81d9C1b771C4e21F3b892",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BSC/EVM address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "ERC20",
+          "networkName": "Ethereum (ERC20)",
+          "depositAddress": "0x9B3a54D092f1e882A4F81d9C1b771C4e21F3b892",
+          "minDepositUsd": 100,
+          "minWithdrawUsd": 50,
+          "withdrawFeeUsd": 5,
+          "confirmations": "12 confirmations · ~3 min",
+          "addressHint": "Ethereum address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "BASE",
+          "networkName": "Base Mainnet",
+          "depositAddress": "0x9B3a54D092f1e882A4F81d9C1b771C4e21F3b892",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.25,
+          "confirmations": "12 confirmations · ~30 sec",
+          "addressHint": "Base/EVM address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "SOL",
+          "networkName": "Solana",
+          "depositAddress": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.5,
+          "confirmations": "32 confirmations · ~15 sec",
+          "addressHint": "Solana Base58 address (32–44 characters)"
+        },
+        {
+          "networkCode": "POLYGON",
+          "networkName": "Polygon POS",
+          "depositAddress": "0x9B3a54D092f1e882A4F81d9C1b771C4e21F3b892",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.25,
+          "confirmations": "64 confirmations · ~1 min",
+          "addressHint": "Polygon/EVM address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "ARBITRUM",
+          "networkName": "Arbitrum One",
+          "depositAddress": "0x9B3a54D092f1e882A4F81d9C1b771C4e21F3b892",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "12 confirmations · ~30 sec",
+          "addressHint": "Arbitrum/EVM address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "BNB",
+      "name": "BNB",
+      "badgeColor": "#D97706",
+      "networks": [
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.35,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BEP20 address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "BTC",
+      "name": "Bitcoin",
+      "badgeColor": "#EA580C",
+      "networks": [
+        {
+          "networkCode": "BTC",
+          "networkName": "Bitcoin (Native)",
+          "depositAddress": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+          "minDepositUsd": 100,
+          "minWithdrawUsd": 50,
+          "withdrawFeeUsd": 4.5,
+          "confirmations": "2 confirmations · ~20 min",
+          "addressHint": "Bitcoin address starting with bc1, 1, or 3"
+        },
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 25,
+          "withdrawFeeUsd": 0.4,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BEP20 address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "ETH",
+      "name": "Ethereum",
+      "badgeColor": "#4F46E5",
+      "networks": [
+        {
+          "networkCode": "ERC20",
+          "networkName": "Ethereum (ERC20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 100,
+          "minWithdrawUsd": 40,
+          "withdrawFeeUsd": 4,
+          "confirmations": "12 confirmations · ~3 min",
+          "addressHint": "Ethereum address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "ARBITRUM",
+          "networkName": "Arbitrum One",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.35,
+          "confirmations": "12 confirmations · ~30 sec",
+          "addressHint": "Arbitrum/EVM address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.35,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BEP20 address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "BASE",
+          "networkName": "Base Mainnet",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.25,
+          "confirmations": "12 confirmations · ~30 sec",
+          "addressHint": "Base/EVM address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "SOL",
+      "name": "Solana",
+      "badgeColor": "#0284C7",
+      "networks": [
+        {
+          "networkCode": "SOL",
+          "networkName": "Solana (Native)",
+          "depositAddress": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.45,
+          "confirmations": "32 confirmations · ~15 sec",
+          "addressHint": "Solana Base58 address (32–44 characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "XRP",
+      "name": "Ripple",
+      "badgeColor": "#334155",
+      "networks": [
+        {
+          "networkCode": "XRPL",
+          "networkName": "XRP Ledger (XRPL)",
+          "depositAddress": "rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh",
+          "memo": "109482751",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.25,
+          "confirmations": "1 ledger · ~5 sec",
+          "addressHint": "XRPL address starting with r (25–35 characters)"
+        },
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BEP20 address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "TRX",
+      "name": "TRON",
+      "badgeColor": "#DC2626",
+      "networks": [
+        {
+          "networkCode": "TRC20",
+          "networkName": "TRON (TRC20)",
+          "depositAddress": "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.5,
+          "confirmations": "19 confirmations · ~1 min",
+          "addressHint": "TRON address starting with T (34 characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "FDUSD",
+      "name": "First Digital USD",
+      "badgeColor": "#0284C7",
+      "networks": [
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.2,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BSC/EVM address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "SOL",
+          "networkName": "Solana",
+          "depositAddress": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "32 confirmations · ~15 sec",
+          "addressHint": "Solana Base58 address (32–44 characters)"
+        },
+        {
+          "networkCode": "ERC20",
+          "networkName": "Ethereum (ERC20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 100,
+          "minWithdrawUsd": 50,
+          "withdrawFeeUsd": 4.5,
+          "confirmations": "12 confirmations · ~3 min",
+          "addressHint": "Ethereum address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "TON",
+      "name": "Toncoin",
+      "badgeColor": "#0088CC",
+      "networks": [
+        {
+          "networkCode": "TON",
+          "networkName": "The Open Network (TON)",
+          "depositAddress": "UQBx7f8pM4W6Z2kQ9rJ7P3wS8yH5L9mK2N4tR6vX1aBcD3eF",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.25,
+          "confirmations": "1 block · ~10 sec",
+          "addressHint": "TON address starting with EQ or UQ (48 characters)"
+        },
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BEP20 address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "LTC",
+      "name": "Litecoin",
+      "badgeColor": "#475569",
+      "networks": [
+        {
+          "networkCode": "LTC",
+          "networkName": "Litecoin (Native)",
+          "depositAddress": "ltc1q2n9x7m3k8w4p5z6y9v2c4b7h8j3d5f0s9a6u4e",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "4 confirmations · ~8 min",
+          "addressHint": "Litecoin address starting with ltc1, L, or M"
+        },
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BEP20 address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "DOGE",
+      "name": "Dogecoin",
+      "badgeColor": "#B45309",
+      "networks": [
+        {
+          "networkCode": "DOGE",
+          "networkName": "Dogecoin (Native)",
+          "depositAddress": "D8vK7h4mW9pQ2rX6tZ3bN5cV8yL1jF4gH9s",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.4,
+          "confirmations": "6 confirmations · ~6 min",
+          "addressHint": "Dogecoin address starting with D (34 characters)"
+        },
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BEP20 address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "ADA",
+      "name": "Cardano",
+      "badgeColor": "#1D4ED8",
+      "networks": [
+        {
+          "networkCode": "ADA",
+          "networkName": "Cardano (Native)",
+          "depositAddress": "addr1q9x7k3m2p8w4z6y9v2c4b7h8j3d5f0s9a6u4e8w2r7t5y3m9p2",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.45,
+          "confirmations": "15 confirmations · ~5 min",
+          "addressHint": "Cardano Shelley address starting with addr1"
+        },
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BEP20 address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "AVAX",
+      "name": "Avalanche",
+      "badgeColor": "#E11D48",
+      "networks": [
+        {
+          "networkCode": "AVAXC",
+          "networkName": "Avalanche C-Chain",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.35,
+          "confirmations": "12 confirmations · ~15 sec",
+          "addressHint": "AVAX C-Chain address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "BEP20",
+          "networkName": "BNB Smart Chain (BEP20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.3,
+          "confirmations": "15 confirmations · ~45 sec",
+          "addressHint": "BEP20 address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "POL",
+      "name": "Polygon",
+      "badgeColor": "#7C3AED",
+      "networks": [
+        {
+          "networkCode": "POLYGON",
+          "networkName": "Polygon POS",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.2,
+          "confirmations": "64 confirmations · ~1 min",
+          "addressHint": "Polygon address starting with 0x (42 hex characters)"
+        },
+        {
+          "networkCode": "ERC20",
+          "networkName": "Ethereum (ERC20)",
+          "depositAddress": "0x4E8a2F19c8B5C41b21fC771a93B2C5f7c2b3190E",
+          "minDepositUsd": 100,
+          "minWithdrawUsd": 40,
+          "withdrawFeeUsd": 4,
+          "confirmations": "12 confirmations · ~3 min",
+          "addressHint": "Ethereum address starting with 0x (42 hex characters)"
+        }
+      ]
+    },
+    {
+      "symbol": "XLM",
+      "name": "Stellar Lumens",
+      "badgeColor": "#0F172A",
+      "networks": [
+        {
+          "networkCode": "XLM",
+          "networkName": "Stellar Network",
+          "depositAddress": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+          "memo": "48291047",
+          "minDepositUsd": 50,
+          "minWithdrawUsd": 20,
+          "withdrawFeeUsd": 0.15,
+          "confirmations": "1 ledger · ~5 sec",
+          "addressHint": "Stellar public key starting with G (56 characters)"
+        }
+      ]
+    }
+  ],
+  "siteConfig": {
+    "brandName": "Nexora AI",
+    "brandSubtitle": "Robotics Fleet",
+    "headquartersAddress": "Technoparkstrasse 1, Tower A, 8005 Zurich, Switzerland",
+    "heroKicker": "6 European Facilities",
+    "heroTitle": "Industrial AI Robotics Leasing",
+    "heroDescription": "Select active Nexora AI robots operating in Munich, Zurich, Eindhoven, and Rotterdam. Fund leases via Binance-supported coins with Finance Department settlement oversight.",
+    "heroImageUrl": "/src/assets/images/hero_robotics_floor_1795701351020.jpg",
+    "primaryCtaText": "Browse Robots",
+    "secondaryCtaText": "How it works",
+    "activeHubsCount": 6,
+    "announcementBanner": "",
+    "referralHeadline": "Invite Investors & Earn 2x Daily Yields",
+    "referralDescription": "Share your invite code. When a team member registers and completes a verified deposit, you earn an instant 5.5% cash reward (e.g. $143 on a $2,600 Veridian A7 allocation) plus double daily yields (2x) across your active units.",
+    "referralRewardRatePct": 5.5,
+    "referralDoubleYieldDays": 7,
+    "footerNotice": "© 2026 Nexora AI Robotics",
+    "howItWorksSteps": [
+      {
+        "title": "01. Register, upload photo & verify ID",
+        "body": "Create your account, add your profile photo, and submit your government ID (plus optional proof of financial ability) for Compliance Department approval."
+      },
+      {
+        "title": "02. Deposit crypto with Finance Dept review",
+        "body": "Choose any Binance-supported coin, scan or copy the treasury address, and submit your TXID or screenshot. Funds credit once verified by the Finance Department."
+      },
+      {
+        "title": "03. Lease AI robots & invite team members",
+        "body": "Lease active AI robots for live daily returns, and invite partners to unlock 5.5% instant deposit rewards plus 2x double daily yields."
+      }
+    ]
+  }
+}

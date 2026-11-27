@@ -196,7 +196,20 @@ export default function App() {
         } else if (msg.type === 'fleet:updated' && Array.isArray(msg.robots)) {
           setRobots(msg.robots);
           setOverview((prev) =>
-            prev ? { ...prev, featuredRobots: msg.robots!.slice(0, 6) } : prev
+            prev
+              ? {
+                  ...prev,
+                  featuredRobots: msg.robots!.slice(0, 8),
+                  stats: {
+                    ...prev.stats,
+                    totalFleetUnits: msg.robots!.reduce((s, r) => s + r.totalUnits, 0),
+                    availableFleetUnits: msg.robots!.reduce(
+                      (s, r) => s + r.availableUnits,
+                      0
+                    ),
+                  },
+                }
+              : prev
           );
         } else if (msg.type === 'dispatches:updated' && Array.isArray(msg.dispatches)) {
           setOverview((prev) =>
@@ -306,6 +319,15 @@ export default function App() {
       wsRef.current?.close();
     };
   }, [connectWebSocket, loadWorkspaceData]);
+
+  useEffect(() => {
+    if (!showQuickSheet) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowQuickSheet(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showQuickSheet]);
 
   const navigateTo = (
     next: AppScreen,
@@ -493,8 +515,15 @@ export default function App() {
 
         <main className={`flex-1 ${showBottomBar ? 'pb-24' : ''}`}>
           {globalError && (
-            <div className="mx-4 mt-4 rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3.5 py-2.5 text-xs font-medium text-red-800 dark:text-red-200">
-              {globalError}
+            <div className="mx-4 mt-4 rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3.5 py-2.5 text-xs font-medium text-red-800 dark:text-red-200 flex items-center justify-between gap-2">
+              <span>{globalError}</span>
+              <button
+                type="button"
+                onClick={() => void loadWorkspaceData()}
+                className="px-2.5 py-1 rounded-lg bg-red-700 text-white text-[11px] font-semibold shrink-0 cursor-pointer"
+              >
+                Retry
+              </button>
             </div>
           )}
 
@@ -545,6 +574,7 @@ export default function App() {
               onOpenVerification={() => navigateTo('verification')}
               onOpenNotifications={() => navigateTo('notifications')}
               onOpenReferrals={() => navigateTo('referrals')}
+              onOpenPortfolio={() => navigateTo('mine')}
             />
           ) : screen === 'rent' ? (
             <MachinesView
@@ -836,11 +866,15 @@ export default function App() {
         {/* Center "+" Quick Action Sheet */}
         {showQuickSheet && (
           <div
+            onClick={() => setShowQuickSheet(false)}
             className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end justify-center"
             role="dialog"
             aria-modal="true"
           >
-            <div className="w-full max-w-[430px] bg-white dark:bg-[#111827] rounded-t-2xl border-t border-[#E5E7EB] dark:border-[#1E293B] p-5 space-y-3">
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-[430px] bg-white dark:bg-[#111827] rounded-t-2xl border-t border-[#E5E7EB] dark:border-[#1E293B] p-5 space-y-3"
+            >
               <div className="w-10 h-1 rounded-full bg-[#D1D5DB] dark:bg-[#334155] mx-auto" />
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC]">

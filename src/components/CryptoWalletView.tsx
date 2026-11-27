@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   AlertTriangle,
@@ -10,19 +10,22 @@ import {
   Clock,
   Copy,
   QrCode,
+  Search,
   ShieldCheck,
   Upload,
+  X,
 } from 'lucide-react';
 import {
   formatUsd,
   submitCryptoDeposit,
   submitCryptoWithdrawal,
 } from '../lib/api.ts';
-import { compressImageToDataUrl } from '../lib/imageUpload.ts';
+import { copyTextToClipboard } from '../lib/clipboard.ts';
 import {
   BINANCE_COINS,
   validateNetworkAddress,
 } from '../lib/cryptoCoins.ts';
+import { compressImageToDataUrl } from '../lib/imageUpload.ts';
 import type {
   BinanceCoinConfig,
   BinanceCoinSymbol,
@@ -53,6 +56,7 @@ export function CryptoWalletView({
   const coins = cryptoCoins && cryptoCoins.length > 0 ? cryptoCoins : BINANCE_COINS;
 
   const [tab, setTab] = useState<'deposit' | 'withdraw'>(initialTab);
+  const [coinSearch, setCoinSearch] = useState('');
   const [coinSymbol, setCoinSymbol] = useState<BinanceCoinSymbol>('USDT');
   const [networkCode, setNetworkCode] = useState<BinanceNetworkCode>('TRC20');
   const [depositAmount, setDepositAmount] = useState<string>(
@@ -75,8 +79,29 @@ export function CryptoWalletView({
     selectedCoin.networks.find((n) => n.networkCode === networkCode) ??
     selectedCoin.networks[0];
 
+  const filteredCoins = useMemo(() => {
+    const q = coinSearch.trim().toLowerCase();
+    if (!q) return coins;
+    return coins.filter(
+      (c) =>
+        c.symbol.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q) ||
+        c.networks.some(
+          (n) =>
+            n.networkCode.toLowerCase().includes(q) ||
+            n.networkName.toLowerCase().includes(q)
+        )
+    );
+  }, [coins, coinSearch]);
+
   const isVerified =
     investor.kycStatus === 'verified' || investor.role === 'master_admin';
+
+  const supportsMemo =
+    selectedNetwork.networkCode === 'XRPL' ||
+    selectedNetwork.networkCode === 'XLM' ||
+    selectedNetwork.networkCode === 'TON' ||
+    Boolean(selectedNetwork.memo);
 
   const handleSelectCoin = (symbol: BinanceCoinSymbol) => {
     const nextCoin = coins.find((c) => c.symbol === symbol) ?? coins[0];
@@ -95,17 +120,18 @@ export function CryptoWalletView({
   };
 
   const handleCopy = async (field: 'address' | 'memo', value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
+    const ok = await copyTextToClipboard(value);
+    if (ok) {
       setCopiedField(field);
       window.setTimeout(() => setCopiedField(null), 2000);
-    } catch {
-      setCopiedField(null);
+    } else {
+      setError('Unable to access clipboard automatically — select and copy the address text above.');
     }
   };
 
   const handleReceiptPick = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     setError(null);
     try {
@@ -172,6 +198,13 @@ export function CryptoWalletView({
       return;
     }
 
+    if (investor.walletBalance < selectedNetwork.minWithdrawUsd) {
+      setError(
+        `Available balance (${formatUsd(investor.walletBalance)}) is below the ${formatUsd(selectedNetwork.minWithdrawUsd)} minimum withdrawal for ${selectedCoin.symbol} (${selectedNetwork.networkCode}).`
+      );
+      return;
+    }
+
     const addrError = validateNetworkAddress(
       selectedNetwork.networkCode,
       withdrawAddress
@@ -195,6 +228,12 @@ export function CryptoWalletView({
     }
     if (amountNum > investor.walletBalance) {
       setError('Withdrawal amount exceeds your available wallet balance.');
+      return;
+    }
+    if (amountNum <= selectedNetwork.withdrawFeeUsd) {
+      setError(
+        `Withdrawal amount must exceed the ${formatUsd(selectedNetwork.withdrawFeeUsd)} network fee.`
+      );
       return;
     }
 
@@ -235,13 +274,13 @@ export function CryptoWalletView({
             type="button"
             onClick={onBack}
             aria-label="Back"
-            className="w-8 h-8 rounded-lg border border-[#E5E7EB] dark:border-[#334155] flex items-center justify-center text-[#111827] dark:text-[#F8FAFC] shrink-0 cursor-pointer"
+            className="w-9 h-9 rounded-lg border border-[#E5E7EB] dark:border-[#334155] flex items-center justify-center text-[#111827] dark:text-[#F8FAFC] shrink-0 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
         )}
-        <div>
-          <h1 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC]">
+        <div className="min-w-0">
+          <h1 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
             Crypto Settlement
           </h1>
         </div>
@@ -276,7 +315,7 @@ export function CryptoWalletView({
               setError(null);
               setSuccessMsg(null);
             }}
-            className={`flex-1 rounded-lg py-2 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+            className={`flex-1 rounded-lg py-2.5 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
               tab === 'deposit'
                 ? 'bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] shadow-2xs'
                 : 'text-[#6B7280] dark:text-[#94A3B8]'
@@ -292,7 +331,7 @@ export function CryptoWalletView({
               setError(null);
               setSuccessMsg(null);
             }}
-            className={`flex-1 rounded-lg py-2 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+            className={`flex-1 rounded-lg py-2.5 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
               tab === 'withdraw'
                 ? 'bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] shadow-2xs'
                 : 'text-[#6B7280] dark:text-[#94A3B8]'
@@ -304,40 +343,73 @@ export function CryptoWalletView({
         </div>
 
         <div className="bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]">
-              1. Select Coin
+              1. Select Coin ({coins.length})
             </p>
             <span className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8]">
-              Binance-supported assets
+              Global Binance rails
             </span>
           </div>
 
-          <div className="grid grid-cols-4 gap-2">
-            {coins.map((coin) => {
-              const active = coin.symbol === selectedCoin.symbol;
-              return (
-                <button
-                  key={coin.symbol}
-                  type="button"
-                  onClick={() => handleSelectCoin(coin.symbol)}
-                  className={`rounded-xl py-2.5 px-2 border flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
-                    active
-                      ? 'bg-[#111827] dark:bg-[#2563EB] text-white border-[#111827] dark:border-[#2563EB]'
-                      : 'bg-[#F9FAFB] dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] border-[#E5E7EB] dark:border-[#1E293B] hover:border-[#9CA3AF]'
-                  }`}
-                >
-                  <span
-                    className="w-6 h-6 rounded-full text-[10px] font-mono font-bold text-white flex items-center justify-center"
-                    style={{ backgroundColor: coin.badgeColor }}
-                  >
-                    {coin.symbol.slice(0, 1)}
-                  </span>
-                  <span className="text-xs font-mono font-semibold">{coin.symbol}</span>
-                </button>
-              );
-            })}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-[#64748B] dark:text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              value={coinSearch}
+              onChange={(e) => setCoinSearch(e.target.value)}
+              placeholder="Search coin or network (e.g. SOL, TON, USDT, TRC20)..."
+              className="w-full h-9 pl-8 pr-3 rounded-xl border border-[#E5E7EB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] text-[11px] text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+            />
           </div>
+
+          {filteredCoins.length === 0 ? (
+            <div className="py-4 text-center text-xs text-[#6B7280] dark:text-[#94A3B8]">
+              No matching coin.{' '}
+              <button
+                type="button"
+                onClick={() => setCoinSearch('')}
+                className="text-[#2563EB] dark:text-[#60A5FA] font-semibold underline cursor-pointer"
+              >
+                Show all {coins.length} coins
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-2 max-h-[248px] overflow-y-auto pr-0.5">
+              {filteredCoins.map((coin) => {
+                const active = coin.symbol === selectedCoin.symbol;
+                return (
+                  <button
+                    key={coin.symbol}
+                    type="button"
+                    onClick={() => handleSelectCoin(coin.symbol)}
+                    className={`rounded-xl py-2 px-1.5 border flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-[#111827] dark:bg-[#2563EB] text-white border-[#111827] dark:border-[#2563EB]'
+                        : 'bg-[#F9FAFB] dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] border-[#E5E7EB] dark:border-[#1E293B] hover:border-[#9CA3AF]'
+                    }`}
+                  >
+                    <span
+                      className="w-6 h-6 rounded-full text-[10px] font-mono font-bold text-white flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: coin.badgeColor }}
+                    >
+                      {coin.symbol.slice(0, 1)}
+                    </span>
+                    <span className="text-[11px] font-mono font-semibold leading-none">
+                      {coin.symbol}
+                    </span>
+                    <span
+                      className={`text-[9px] truncate max-w-full leading-none ${
+                        active ? 'text-white/80' : 'text-[#6B7280] dark:text-[#94A3B8]'
+                      }`}
+                    >
+                      {coin.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="pt-2 border-t border-[#F3F4F6] dark:border-[#1E293B] space-y-2">
             <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]">
@@ -414,7 +486,7 @@ export function CryptoWalletView({
                     onClick={() =>
                       handleCopy('address', selectedNetwork.depositAddress)
                     }
-                    className="w-full h-10 rounded-xl bg-[#111827] dark:bg-[#2563EB] text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full h-11 rounded-xl bg-[#111827] dark:bg-[#2563EB] text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     {copiedField === 'address' ? (
                       <>
@@ -439,7 +511,7 @@ export function CryptoWalletView({
                       <button
                         type="button"
                         onClick={() => handleCopy('memo', selectedNetwork.memo!)}
-                        className="font-mono font-semibold text-[#2563EB] dark:text-[#60A5FA] cursor-pointer"
+                        className="font-mono font-semibold text-[#2563EB] dark:text-[#60A5FA] cursor-pointer py-1 px-2"
                       >
                         {copiedField === 'memo' ? 'Copied' : 'Copy Memo'}
                       </button>
@@ -464,6 +536,7 @@ export function CryptoWalletView({
 
             <form
               onSubmit={handleDepositSubmit}
+              noValidate
               className="bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl p-4 space-y-3"
             >
               <div className="flex items-center justify-between gap-2">
@@ -492,9 +565,11 @@ export function CryptoWalletView({
                     type="number"
                     min={selectedNetwork.minDepositUsd}
                     step="0.01"
-                    required
                     value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
+                    onChange={(e) => {
+                      setDepositAmount(e.target.value);
+                      setError(null);
+                    }}
                     className="w-full h-11 pl-7 pr-3.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono tabular-nums text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                   />
                 </div>
@@ -503,8 +578,11 @@ export function CryptoWalletView({
                     <button
                       key={preset}
                       type="button"
-                      onClick={() => setDepositAmount(String(preset))}
-                      className="py-1.5 rounded-lg border border-[#E5E7EB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] font-mono tabular-nums text-[10.5px] font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
+                      onClick={() => {
+                        setDepositAmount(String(preset));
+                        setError(null);
+                      }}
+                      className="py-2 rounded-lg border border-[#E5E7EB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] font-mono tabular-nums text-[10.5px] font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
                     >
                       ${preset.toLocaleString()}
                     </button>
@@ -523,38 +601,53 @@ export function CryptoWalletView({
                   id="app-deposit-hash"
                   type="text"
                   value={txHash}
-                  onChange={(e) => setTxHash(e.target.value)}
+                  onChange={(e) => {
+                    setTxHash(e.target.value);
+                    setError(null);
+                  }}
                   placeholder="Paste blockchain TXID from Binance"
                   className="w-full h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-[11px] text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
               </div>
 
-              <label className="rounded-xl border border-dashed border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] p-3 flex items-center gap-3 cursor-pointer hover:border-[#2563EB]">
-                {receiptImageUrl ? (
-                  <img
-                    src={receiptImageUrl}
-                    alt="Transfer receipt"
-                    className="w-11 h-11 rounded-lg object-cover shrink-0"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-lg bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] flex items-center justify-center shrink-0">
-                    <Upload className="w-4 h-4 text-[#6B7280] dark:text-[#94A3B8]" />
+              <div className="flex items-center gap-2">
+                <label className="flex-1 rounded-xl border border-dashed border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] p-3 flex items-center gap-3 cursor-pointer hover:border-[#2563EB]">
+                  {receiptImageUrl ? (
+                    <img
+                      src={receiptImageUrl}
+                      alt="Transfer receipt"
+                      className="w-11 h-11 rounded-lg object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-lg bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] flex items-center justify-center shrink-0">
+                      <Upload className="w-4 h-4 text-[#6B7280] dark:text-[#94A3B8]" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold text-[#111827] dark:text-[#F8FAFC]">
+                      {receiptImageUrl
+                        ? 'Transfer screenshot attached (tap to replace)'
+                        : 'Attach Binance transfer screenshot (optional if TXID entered)'}
+                    </p>
                   </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleReceiptPick}
+                    className="sr-only"
+                  />
+                </label>
+                {receiptImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setReceiptImageUrl('')}
+                    aria-label="Remove screenshot"
+                    className="w-10 h-10 rounded-xl border border-[#E5E7EB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] flex items-center justify-center text-[#6B7280] hover:text-red-600 shrink-0 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-semibold text-[#111827] dark:text-[#F8FAFC]">
-                    {receiptImageUrl
-                      ? 'Transfer screenshot attached'
-                      : 'Attach Binance transfer screenshot (optional if TXID entered)'}
-                  </p>
-                </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleReceiptPick}
-                  className="sr-only"
-                />
-              </label>
+              </div>
 
               {error && (
                 <div
@@ -603,7 +696,7 @@ export function CryptoWalletView({
                   <button
                     type="button"
                     onClick={onOpenVerification}
-                    className="px-3.5 py-2 rounded-lg bg-[#111827] dark:bg-[#2563EB] text-white text-[11px] font-semibold cursor-pointer"
+                    className="px-3.5 py-2.5 rounded-lg bg-[#111827] dark:bg-[#2563EB] text-white text-[11px] font-semibold cursor-pointer"
                   >
                     Open Verification Center →
                   </button>
@@ -613,6 +706,7 @@ export function CryptoWalletView({
 
             <form
               onSubmit={handleWithdrawSubmit}
+              noValidate
               className="bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl p-4 space-y-4"
             >
               <div className="flex items-center justify-between gap-2">
@@ -635,9 +729,11 @@ export function CryptoWalletView({
                 <input
                   id="app-withdraw-addr"
                   type="text"
-                  required
                   value={withdrawAddress}
-                  onChange={(e) => setWithdrawAddress(e.target.value)}
+                  onChange={(e) => {
+                    setWithdrawAddress(e.target.value);
+                    setError(null);
+                  }}
                   placeholder={selectedNetwork.depositAddress}
                   className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-[11px] text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
@@ -646,21 +742,31 @@ export function CryptoWalletView({
                 </p>
               </div>
 
-              {selectedNetwork.networkCode === 'XRPL' && (
+              {supportsMemo && (
                 <div>
                   <label
                     htmlFor="app-withdraw-memo"
                     className="block text-[11px] font-medium text-[#6B7280] dark:text-[#94A3B8] mb-1"
                   >
-                    Destination Tag / Memo (Required for XRP)
+                    Destination Tag / Memo (
+                    {selectedNetwork.networkCode === 'XRPL'
+                      ? 'Required for XRP'
+                      : 'Optional if required by your exchange'}
+                    )
                   </label>
                   <input
                     id="app-withdraw-memo"
                     type="text"
-                    required
                     value={withdrawMemo}
-                    onChange={(e) => setWithdrawMemo(e.target.value)}
-                    placeholder="e.g. 109482751"
+                    onChange={(e) => {
+                      setWithdrawMemo(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder={
+                      selectedNetwork.networkCode === 'XRPL'
+                        ? 'e.g. 109482751'
+                        : 'Exchange memo or tag'
+                    }
                     className="w-full h-11 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                   />
                 </div>
@@ -686,11 +792,12 @@ export function CryptoWalletView({
                     id="app-withdraw-amt"
                     type="number"
                     min={selectedNetwork.minWithdrawUsd}
-                    max={investor.walletBalance}
                     step="0.01"
-                    required
                     value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    onChange={(e) => {
+                      setWithdrawAmount(e.target.value);
+                      setError(null);
+                    }}
                     placeholder={`Min ${selectedNetwork.minWithdrawUsd}`}
                     className="w-full h-11 pl-7 pr-3.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono tabular-nums text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                   />
@@ -703,9 +810,15 @@ export function CryptoWalletView({
                       <button
                         key={label}
                         type="button"
-                        disabled={investor.walletBalance <= 0}
-                        onClick={() => setWithdrawAmount(String(val))}
-                        className="py-1.5 rounded-lg border border-[#E5E7EB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] font-mono text-[11px] font-medium text-[#111827] dark:text-[#F8FAFC] disabled:opacity-40 cursor-pointer"
+                        onClick={() => {
+                          setError(null);
+                          if (investor.walletBalance <= 0) {
+                            setError('Your available balance is $0.00. Deposit crypto or collect yield first.');
+                            return;
+                          }
+                          setWithdrawAmount(String(val));
+                        }}
+                        className="py-2 rounded-lg border border-[#E5E7EB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] font-mono text-[11px] font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
                       >
                         {label}
                       </button>
@@ -732,9 +845,30 @@ export function CryptoWalletView({
               {error && (
                 <div
                   role="alert"
-                  className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3 py-2 text-[11px] font-medium text-red-800 dark:text-red-200"
+                  className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3 py-2.5 text-[11px] font-medium text-red-800 dark:text-red-200 space-y-2"
                 >
-                  {error}
+                  <p>{error}</p>
+                  {!isVerified && onOpenVerification && (
+                    <button
+                      type="button"
+                      onClick={onOpenVerification}
+                      className="px-3 py-1.5 rounded-lg bg-[#111827] dark:bg-[#2563EB] text-white text-[10.5px] font-semibold cursor-pointer"
+                    >
+                      Verify Identity Now →
+                    </button>
+                  )}
+                  {isVerified && investor.walletBalance < selectedNetwork.minWithdrawUsd && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab('deposit');
+                        setError(null);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[#2563EB] text-white text-[10.5px] font-semibold cursor-pointer"
+                    >
+                      Switch to Deposit Crypto →
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -746,12 +880,8 @@ export function CryptoWalletView({
 
               <button
                 type="submit"
-                disabled={
-                  submitting ||
-                  !isVerified ||
-                  investor.walletBalance < selectedNetwork.minWithdrawUsd
-                }
-                className="w-full h-12 rounded-xl bg-[#111827] dark:bg-[#2563EB] hover:bg-[#1F2937] dark:hover:bg-[#1D4ED8] text-white text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer"
+                disabled={submitting}
+                className="w-full h-12 rounded-xl bg-[#111827] dark:bg-[#2563EB] hover:bg-[#1F2937] dark:hover:bg-[#1D4ED8] text-white text-xs font-semibold disabled:opacity-60 transition-colors cursor-pointer"
               >
                 {submitting
                   ? 'Submitting request...'

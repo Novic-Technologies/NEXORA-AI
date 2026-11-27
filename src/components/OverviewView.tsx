@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -31,6 +31,7 @@ interface OverviewViewProps {
   onOpenVerification: () => void;
   onOpenNotifications: () => void;
   onOpenReferrals: () => void;
+  onOpenPortfolio: () => void;
 }
 
 const DISPATCH_IMAGES: Record<string, string> = {
@@ -51,8 +52,18 @@ export function OverviewView({
   onOpenVerification,
   onOpenNotifications,
   onOpenReferrals,
+  onOpenPortfolio,
 }: OverviewViewProps) {
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+
+  useEffect(() => {
+    if (!showHowItWorks) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowHowItWorks(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showHowItWorks]);
   const stats = overview?.stats;
   const site = overview?.siteConfig;
   const featured = overview?.featuredRobots ?? [];
@@ -90,13 +101,22 @@ export function OverviewView({
             >
               {formatUsd(investor.walletBalance)}
             </button>
-            {investor.avatarUrl ? (
-              <img
-                src={investor.avatarUrl}
-                alt={investor.fullName}
-                className="w-8 h-8 rounded-full object-cover border border-[#E5E7EB] dark:border-[#334155]"
-              />
-            ) : null}
+            <button
+              type="button"
+              onClick={onOpenPortfolio}
+              aria-label="Open investor portfolio"
+              className="w-8 h-8 rounded-full overflow-hidden border border-[#E5E7EB] dark:border-[#334155] bg-[#111827] dark:bg-[#1E293B] text-white text-xs font-bold flex items-center justify-center shrink-0 cursor-pointer"
+            >
+              {investor.avatarUrl ? (
+                <img
+                  src={investor.avatarUrl}
+                  alt={investor.fullName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{investor.fullName.trim().charAt(0).toUpperCase() || 'I'}</span>
+              )}
+            </button>
           </div>
         ) : (
           <div className="flex items-center gap-1.5">
@@ -169,28 +189,40 @@ export function OverviewView({
         </section>
 
         {/* Key Fleet Metrics Strip */}
-        <section className="grid grid-cols-3 bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl divide-x divide-[#E5E7EB] dark:divide-[#1E293B]">
-          <div className="p-3.5">
+        <section className="grid grid-cols-3 bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl divide-x divide-[#E5E7EB] dark:divide-[#1E293B] overflow-hidden">
+          <button
+            type="button"
+            onClick={onExploreFleet}
+            className="p-3.5 text-left hover:bg-[#F9FAFB] dark:hover:bg-[#1E293B]/60 transition-colors cursor-pointer"
+          >
             <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8]">Total Fleet</p>
             <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
               {stats ? stats.totalFleetUnits : '—'}
             </p>
             <p className="text-[10px] text-[#6B7280] dark:text-[#94A3B8]">Deployed units</p>
-          </div>
-          <div className="p-3.5">
+          </button>
+          <button
+            type="button"
+            onClick={onExploreFleet}
+            className="p-3.5 text-left hover:bg-[#F9FAFB] dark:hover:bg-[#1E293B]/60 transition-colors cursor-pointer"
+          >
             <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8]">Daily Return</p>
             <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#059669] dark:text-[#34D399]">
               {stats ? stats.dailyRateRange : '—'}
             </p>
             <p className="text-[10px] text-[#6B7280] dark:text-[#94A3B8]">Accrues live</p>
-          </div>
-          <div className="p-3.5">
+          </button>
+          <button
+            type="button"
+            onClick={() => (investor ? onOpenDeposit() : onOpenAuth('register'))}
+            className="p-3.5 text-left hover:bg-[#F9FAFB] dark:hover:bg-[#1E293B]/60 transition-colors cursor-pointer"
+          >
             <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8]">Crypto Assets</p>
             <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
               {stats ? `${stats.supportedCoins} Coins` : '—'}
             </p>
             <p className="text-[10px] text-[#6B7280] dark:text-[#94A3B8]">Binance chains</p>
-          </div>
+          </button>
         </section>
 
         {/* Invite & Earn 2x Yield Banner */}
@@ -259,7 +291,7 @@ export function OverviewView({
                     Fund wallet via Binance coins
                   </p>
                   <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8] truncate mt-0.5">
-                    USDT, USDC, BNB, BTC, ETH, SOL, XRP & TRX
+                    {stats ? `${stats.supportedCoins} Binance coins · ` : ''}USDT, USDC, SOL, BTC, ETH, TON &amp; more
                   </p>
                 </div>
               </div>
@@ -448,6 +480,9 @@ export function OverviewView({
       {/* How It Works Sheet */}
       {showHowItWorks && (
         <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowHowItWorks(false);
+          }}
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end justify-center"
           role="dialog"
           aria-modal="true"

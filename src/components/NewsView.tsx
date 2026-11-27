@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, X } from 'lucide-react';
 import type { FleetDispatch } from '../types.ts';
 import { RobotImage } from './RobotImage.tsx';
@@ -21,6 +21,22 @@ export function NewsView({ dispatches, initialArticleId }: NewsViewProps) {
       ? dispatches.find((d) => d.id === initialArticleId) ?? null
       : null
   );
+
+  useEffect(() => {
+    if (initialArticleId) {
+      const found = dispatches.find((d) => d.id === initialArticleId);
+      if (found) setActiveStory(found);
+    }
+  }, [initialArticleId, dispatches]);
+
+  useEffect(() => {
+    if (!activeStory) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActiveStory(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeStory]);
 
   const categories = ['All', ...Array.from(new Set(dispatches.map((d) => d.category)))];
   const visible = dispatches.filter(
@@ -115,11 +131,15 @@ export function NewsView({ dispatches, initialArticleId }: NewsViewProps) {
 
       {activeStory && (
         <div
+          onClick={() => setActiveStory(null)}
           className="fixed inset-0 z-50 bg-[#0B1220]/70 backdrop-blur-xs flex items-end justify-center"
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-[430px] max-h-[85dvh] overflow-y-auto bg-white dark:bg-[#111827] rounded-t-2xl border-t border-[#E2E8F0] dark:border-[#1E293B] p-5 space-y-4">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[430px] max-h-[85dvh] overflow-y-auto bg-white dark:bg-[#111827] rounded-t-2xl border-t border-[#E2E8F0] dark:border-[#1E293B] p-5 space-y-4"
+          >
             <div className="w-10 h-1 rounded-full bg-[#CBD5E1] dark:bg-[#334155] mx-auto" />
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs">

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Check, Copy, Search } from 'lucide-react';
 import { formatDateTime, formatUsd, truncateAddress } from '../lib/api.ts';
+import { copyTextToClipboard } from '../lib/clipboard.ts';
 import type { TransactionType, WalletTransaction } from '../types.ts';
 
 interface ActivityViewProps {
@@ -42,12 +43,10 @@ export function ActivityView({
   }, [transactions, filter, search]);
 
   const copyValue = async (id: string, value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
+    const ok = await copyTextToClipboard(value);
+    if (ok) {
       setCopiedId(id);
       window.setTimeout(() => setCopiedId(null), 1500);
-    } catch {
-      setCopiedId(null);
     }
   };
 

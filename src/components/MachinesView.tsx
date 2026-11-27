@@ -94,6 +94,15 @@ export function MachinesView({
     }
   }, [preselectedRobot, onClearPreselected]);
 
+  useEffect(() => {
+    if (!selectedRobot) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMachineSheet();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedRobot]);
+
   const filteredRobots = useMemo(() => {
     const q = search.trim().toLowerCase();
     return robots.filter((r) => {
@@ -150,7 +159,7 @@ export function MachinesView({
       <header className="sticky top-0 z-30 h-14 px-4 bg-white/95 dark:bg-[#0F172A]/95 backdrop-blur-md border-b border-[#E2E8F0] dark:border-[#1E293B] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <h1 className="text-base font-semibold text-[#0F172A] dark:text-[#F8FAFC] truncate">
-            AI Fleet Units
+            AI Fleet ({robots.length})
           </h1>
           {isDoubleActive && (
             <span className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-[#059669] dark:text-[#34D399] font-mono text-[10px] font-bold">
@@ -308,6 +317,9 @@ export function MachinesView({
       {/* Bottom Sheet for Inspect & Rent Machine */}
       {selectedRobot && (
         <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeMachineSheet();
+          }}
           className="fixed inset-0 z-50 bg-[#0B1220]/70 backdrop-blur-xs flex items-end justify-center"
           role="dialog"
           aria-modal="true"
@@ -461,8 +473,11 @@ export function MachinesView({
                       type="button"
                       aria-label="Decrease quantity"
                       disabled={quantity <= 1}
-                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                      className="w-9 h-9 rounded-lg border border-[#E2E8F0] dark:border-[#334155] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-center disabled:opacity-40 cursor-pointer"
+                      onClick={() => {
+                        setRentalError(null);
+                        setQuantity((q) => Math.max(1, q - 1));
+                      }}
+                      className="w-10 h-10 rounded-lg border border-[#E2E8F0] dark:border-[#334155] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-center disabled:opacity-40 cursor-pointer"
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
@@ -473,12 +488,11 @@ export function MachinesView({
                       type="button"
                       aria-label="Increase quantity"
                       disabled={quantity >= selectedRobot.availableUnits}
-                      onClick={() =>
-                        setQuantity((q) =>
-                          Math.min(selectedRobot.availableUnits, q + 1)
-                        )
-                      }
-                      className="w-9 h-9 rounded-lg border border-[#E2E8F0] dark:border-[#334155] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-center disabled:opacity-40 cursor-pointer"
+                      onClick={() => {
+                        setRentalError(null);
+                        setQuantity((q) => Math.min(selectedRobot.availableUnits, q + 1));
+                      }}
+                      className="w-10 h-10 rounded-lg border border-[#E2E8F0] dark:border-[#334155] text-[#0F172A] dark:text-[#F8FAFC] flex items-center justify-center disabled:opacity-40 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>

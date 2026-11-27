@@ -10,6 +10,7 @@ import {
   Users,
 } from 'lucide-react';
 import { formatDateTime, formatUsd } from '../lib/api.ts';
+import { copyTextToClipboard } from '../lib/clipboard.ts';
 import type {
   InvestorProfile,
   ReferralSummary,
@@ -49,12 +50,10 @@ export function ReferralsView({
     summary?.doubleYieldDaysPerInvite ?? siteConfig?.referralDoubleYieldDays ?? 7;
 
   const copyText = async (which: 'code' | 'link', val: string) => {
-    try {
-      await navigator.clipboard.writeText(val);
+    const ok = await copyTextToClipboard(val);
+    if (ok) {
       setCopied(which);
       window.setTimeout(() => setCopied(null), 2000);
-    } catch {
-      setCopied(null);
     }
   };
 

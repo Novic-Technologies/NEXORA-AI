@@ -13,37 +13,37 @@ export function BrandLogo({
   brandName = 'Nexora AI',
   subtitle,
 }: BrandLogoProps) {
-  const boxClass =
+  const emblemBoxClass =
     size === 'sm'
-      ? 'w-8 h-8 rounded-lg p-1'
+      ? 'w-9 h-9 rounded-xl p-1.5'
       : size === 'lg'
-        ? 'w-11 h-11 rounded-xl p-1.5'
-        : 'w-9 h-9 rounded-xl p-1';
+        ? 'w-12 h-12 rounded-2xl p-2'
+        : 'w-10 h-10 rounded-xl p-1.5';
 
   return (
-    <div className="inline-flex items-center gap-2.5 min-w-0">
+    <div className="inline-flex items-center gap-2.5 min-w-0 select-none">
       <div
-        className={`${boxClass} bg-white dark:bg-[#1E293B] border border-[#E5E7EB] dark:border-[#334155] shadow-2xs flex items-center justify-center shrink-0 overflow-hidden`}
+        className={`${emblemBoxClass} bg-white ring-1 ring-[#E2E8F0] dark:ring-white/15 shadow-[0_1px_4px_rgba(15,23,42,0.08)] flex items-center justify-center shrink-0 overflow-hidden`}
       >
         <img
           src="/assets/aistudio/lllll_1800fdd7.PNG"
-          alt={`${brandName} Logo`}
+          alt={`${brandName} Emblem`}
           className="w-full h-full object-contain"
         />
       </div>
       {showText && (
-        <div className="min-w-0 leading-tight">
+        <div className="min-w-0 flex flex-col justify-center">
           <span
-            className={`block font-display font-bold tracking-tight truncate ${
-              size === 'lg' ? 'text-lg' : 'text-[15px]'
-            } ${darkText ? 'text-[#111827] dark:text-[#F8FAFC]' : 'text-white'}`}
+            className={`block font-display font-bold tracking-[-0.025em] leading-none truncate ${
+              size === 'lg' ? 'text-[19px]' : size === 'md' ? 'text-[16px]' : 'text-[15px]'
+            } ${darkText ? 'text-[#0F172A] dark:text-[#F8FAFC]' : 'text-white'}`}
           >
             {brandName}
           </span>
           {subtitle && (
             <span
-              className={`block text-[10px] font-medium truncate ${
-                darkText ? 'text-[#6B7280] dark:text-[#94A3B8]' : 'text-[#9CA3AF]'
+              className={`block mt-1 text-[9.5px] font-mono uppercase tracking-[0.1em] leading-none truncate ${
+                darkText ? 'text-[#64748B] dark:text-[#94A3B8]' : 'text-[#94A3B8]'
               }`}
             >
               {subtitle}

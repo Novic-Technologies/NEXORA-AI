@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Download, Smartphone, WifiOff, X } from 'lucide-react';
 import { useOnlineStatus, usePWAInstall } from '../lib/usePWAInstall.ts';
 
@@ -9,6 +9,15 @@ interface PWAInstallButtonProps {
 export function PWAInstallButton({ variant = 'compact' }: PWAInstallButtonProps) {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [showGuide, setShowGuide] = useState(false);
+
+  useEffect(() => {
+    if (!showGuide) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowGuide(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showGuide]);
 
   if (isInstalled) {
     return null;
@@ -62,11 +71,15 @@ export function PWAInstallButton({ variant = 'compact' }: PWAInstallButtonProps)
 
       {showGuide && (
         <div
+          onClick={() => setShowGuide(false)}
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1F2937] p-5 space-y-3 shadow-xl">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1F2937] p-5 space-y-3 shadow-xl"
+          >
             <div className="flex items-center justify-between">
               <h3 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC]">
                 {isIOS ? 'Install on iPhone / iPad' : 'Install Nexora AI App'}

@@ -1,22 +1,37 @@
 export type BinanceCoinSymbol =
   | 'USDT'
   | 'USDC'
+  | 'FDUSD'
   | 'BNB'
   | 'BTC'
   | 'ETH'
   | 'SOL'
+  | 'TON'
   | 'XRP'
-  | 'TRX';
+  | 'TRX'
+  | 'LTC'
+  | 'DOGE'
+  | 'ADA'
+  | 'AVAX'
+  | 'POL'
+  | 'XLM';
 
 export type BinanceNetworkCode =
   | 'TRC20'
   | 'BEP20'
   | 'ERC20'
   | 'SOL'
+  | 'TON'
   | 'BASE'
   | 'BTC'
   | 'ARBITRUM'
-  | 'XRPL';
+  | 'POLYGON'
+  | 'AVAXC'
+  | 'XRPL'
+  | 'LTC'
+  | 'DOGE'
+  | 'ADA'
+  | 'XLM';
 
 export interface BinanceNetworkOption {
   networkCode: BinanceNetworkCode;

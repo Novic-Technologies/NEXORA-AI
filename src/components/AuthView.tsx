@@ -92,6 +92,7 @@ export function AuthView({
 
   const handleAvatarUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     setError(null);
     try {
@@ -199,7 +200,7 @@ export function AuthView({
   return (
     <div className="min-h-[100dvh] flex flex-col bg-[#F4F6F9] dark:bg-[#0B1120]">
       <div className="bg-white dark:bg-[#0F172A] border-b border-[#E5E7EB] dark:border-[#1E293B] px-4 pt-4 pb-5">
-        <div className="flex items-center justify-between">
+        <div className="grid grid-cols-[36px_1fr_36px] items-center gap-2">
           <button
             type="button"
             onClick={onBack}
@@ -208,8 +209,10 @@ export function AuthView({
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <BrandLogo size="sm" brandName={brandName} />
-          <div className="w-9" />
+          <div className="justify-self-center">
+            <BrandLogo size="sm" brandName={brandName} />
+          </div>
+          <div />
         </div>
 
         <div className="mt-5">

@@ -27,6 +27,7 @@ import {
   parseInternationalPhone,
   type CountryOption,
 } from '../lib/countries.ts';
+import { copyTextToClipboard } from '../lib/clipboard.ts';
 import { compressImageToDataUrl } from '../lib/imageUpload.ts';
 import type { ThemePreference } from '../lib/useTheme.ts';
 import type { InvestorClassification, InvestorProfile } from '../types.ts';
@@ -84,6 +85,7 @@ export function AccountView({
 
   const handlePhotoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     setError(null);
     setSaved(false);
@@ -121,12 +123,10 @@ export function AccountView({
   };
 
   const handleCopyRef = async () => {
-    try {
-      await navigator.clipboard.writeText(investor.referralCode);
+    const ok = await copyTextToClipboard(investor.referralCode);
+    if (ok) {
       setCopiedRef(true);
       window.setTimeout(() => setCopiedRef(false), 1800);
-    } catch {
-      setCopiedRef(false);
     }
   };
 

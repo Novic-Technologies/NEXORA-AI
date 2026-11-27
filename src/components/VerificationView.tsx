@@ -76,6 +76,7 @@ export function VerificationView({
     maxDim = 960
   ) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     setError(null);
     try {
@@ -193,7 +194,7 @@ export function VerificationView({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-4 space-y-3">
             <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]">
               1. Investor Profile Photo (Required)

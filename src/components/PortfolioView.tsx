@@ -73,6 +73,7 @@ export function PortfolioView({
 }: PortfolioViewProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionInfo, setActionInfo] = useState<string | null>(null);
 
   const activeRentals = rentals.filter((r) => r.status === 'active');
   const completedRentals = rentals.filter((r) => r.status === 'completed');
@@ -95,12 +96,21 @@ export function PortfolioView({
       new Date(investor.doubleYieldActiveUntil).getTime() > Date.now()
   );
 
-  const handleClaimYield = async (rentalId: string) => {
+  const handleClaimYield = async (rental: EnrichedMachineRental) => {
     setActionError(null);
-    setBusyId(rentalId);
+    setActionInfo(null);
+    const claimable = Number(rental.accruedUnclaimedYield.toFixed(2));
+    if (claimable < 0.01) {
+      setActionInfo(
+        `${rental.robotName} has accrued ${formatUsd(rental.accruedUnclaimedYield, 4)} so far. Instant collection unlocks automatically once live accrual reaches $0.01.`
+      );
+      return;
+    }
+    setBusyId(rental.id);
     try {
-      const res = await claimRentalYield(rentalId);
+      const res = await claimRentalYield(rental.id);
       onRentalUpdated(res.rental, res.investor, res.transaction);
+      setActionInfo(`Collected ${formatUsd(res.transaction.amount)} yield into your wallet.`);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Unable to collect yield.');
     } finally {
@@ -140,7 +150,11 @@ export function PortfolioView({
 
       <div className="px-4 space-y-4">
         {/* Investor Identity Card */}
-        <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-3.5 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onOpenAccount}
+          className="w-full text-left rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] hover:border-[#9CA3AF] dark:hover:border-[#334155] bg-white dark:bg-[#111827] p-3.5 flex items-center justify-between gap-3 transition-colors cursor-pointer"
+        >
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-12 h-12 rounded-full bg-[#111827] dark:bg-[#1E293B] text-white font-semibold overflow-hidden flex items-center justify-center shrink-0 border border-[#E5E7EB] dark:border-[#334155]">
               {investor.avatarUrl ? (
@@ -189,7 +203,7 @@ export function PortfolioView({
                   ? 'COMPLIANCE'
                   : investor.kycStatus.toUpperCase()}
           </span>
-        </div>
+        </button>
 
         {/* 2x Double Yield & Team Referral Banner */}
         <button
@@ -339,8 +353,12 @@ export function PortfolioView({
         </div>
 
         {/* 3 Mini Stat Cards */}
-        <div className="grid grid-cols-3 bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl divide-x divide-[#E5E7EB] dark:divide-[#1E293B]">
-          <div className="p-3">
+        <div className="grid grid-cols-3 bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl divide-x divide-[#E5E7EB] dark:divide-[#1E293B] overflow-hidden">
+          <button
+            type="button"
+            onClick={onBrowseMachines}
+            className="p-3 text-left hover:bg-[#F9FAFB] dark:hover:bg-[#1E293B]/60 transition-colors cursor-pointer"
+          >
             <div className="flex items-center gap-1 text-[#6B7280] dark:text-[#94A3B8] text-[10.5px]">
               <Layers className="w-3 h-3" />
               <span>Active</span>
@@ -348,9 +366,13 @@ export function PortfolioView({
             <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
               {activeRentals.reduce((s, r) => s + r.quantity, 0)}
             </p>
-          </div>
+          </button>
 
-          <div className="p-3">
+          <button
+            type="button"
+            onClick={onOpenActivity}
+            className="p-3 text-left hover:bg-[#F9FAFB] dark:hover:bg-[#1E293B]/60 transition-colors cursor-pointer"
+          >
             <div className="flex items-center gap-1 text-[#6B7280] dark:text-[#94A3B8] text-[10.5px]">
               <TrendingUp className="w-3 h-3 text-[#059669] dark:text-[#34D399]" />
               <span>Paid out</span>
@@ -358,9 +380,13 @@ export function PortfolioView({
             <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#059669] dark:text-[#34D399]">
               {formatUsd(investor.totalYieldCollected)}
             </p>
-          </div>
+          </button>
 
-          <div className="p-3">
+          <button
+            type="button"
+            onClick={onOpenActivity}
+            className="p-3 text-left hover:bg-[#F9FAFB] dark:hover:bg-[#1E293B]/60 transition-colors cursor-pointer"
+          >
             <div className="flex items-center gap-1 text-[#6B7280] dark:text-[#94A3B8] text-[10.5px]">
               <CheckCircle2 className="w-3 h-3" />
               <span>Settled</span>
@@ -368,12 +394,16 @@ export function PortfolioView({
             <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
               {completedRentals.length}
             </p>
-          </div>
+          </button>
         </div>
 
         {/* Pending Approvals Notice */}
         {pendingTransfers.length > 0 && (
-          <div className="rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3.5 space-y-2">
+          <button
+            type="button"
+            onClick={onOpenActivity}
+            className="w-full text-left rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3.5 space-y-2 cursor-pointer"
+          >
             <p className="text-xs font-bold text-amber-950 dark:text-amber-100 inline-flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-[#D97706] dark:text-[#FBBF24]" />
               <span>
@@ -393,7 +423,7 @@ export function PortfolioView({
                 </span>
               </div>
             ))}
-          </div>
+          </button>
         )}
 
         {actionError && (
@@ -402,6 +432,11 @@ export function PortfolioView({
             className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3.5 py-2.5 text-xs font-medium text-red-800 dark:text-red-200"
           >
             {actionError}
+          </div>
+        )}
+        {actionInfo && (
+          <div className="rounded-xl border border-[#BFDBFE] dark:border-[#1E3A8A] bg-[#EFF6FF] dark:bg-[#0F172A] px-3.5 py-2.5 text-xs font-medium text-[#1E3A8A] dark:text-[#93C5FD]">
+            {actionInfo}
           </div>
         )}
 
@@ -512,15 +547,21 @@ export function PortfolioView({
 
                     <button
                       type="button"
-                      disabled={isBusy || !canClaim}
-                      onClick={() => handleClaimYield(rental.id)}
-                      className="w-full h-10 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-45 transition-colors cursor-pointer"
+                      disabled={isBusy}
+                      onClick={() => handleClaimYield(rental)}
+                      className={`w-full h-10 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                        canClaim
+                          ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white'
+                          : 'bg-[#EFF6FF] dark:bg-[#1E3A8A]/30 border border-[#BFDBFE] dark:border-[#3B82F6]/30 text-[#1D4ED8] dark:text-[#93C5FD]'
+                      }`}
                     >
                       <Coins className="w-3.5 h-3.5" />
                       <span>
-                        {canClaim
-                          ? `Collect ${formatUsd(claimable)} to Wallet`
-                          : 'Accruing live yield ($0.01 min to collect)'}
+                        {isBusy
+                          ? 'Collecting yield...'
+                          : canClaim
+                            ? `Collect ${formatUsd(claimable)} to Wallet`
+                            : `Accruing live (${formatUsd(rental.accruedUnclaimedYield, 4)} · $0.01 min)`}
                       </span>
                     </button>
                   </div>
@@ -558,9 +599,11 @@ export function PortfolioView({
                   tx.type === 'yield_payout' ||
                   tx.type === 'referral_reward';
                 return (
-                  <div
+                  <button
                     key={tx.id}
-                    className="px-4 py-3 flex items-center justify-between gap-3"
+                    type="button"
+                    onClick={onOpenActivity}
+                    className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 hover:bg-[#F9FAFB] dark:hover:bg-[#1E293B]/50 transition-colors cursor-pointer"
                   >
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC] truncate">
@@ -584,7 +627,7 @@ export function PortfolioView({
                       {inbound ? '+' : '-'}
                       {formatUsd(tx.amount)}
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
