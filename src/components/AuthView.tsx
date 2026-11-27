@@ -2,20 +2,21 @@ import { useState, type ChangeEvent, type FormEvent } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Building2,
   Camera,
+  CheckCircle2,
   Eye,
   EyeOff,
   Gift,
   Lock,
   Mail,
   Shield,
-  UserCheck,
 } from 'lucide-react';
 import {
-  claimMasterAdmin,
-  loginDemoInvestor,
   loginInvestor,
   registerInvestor,
+  requestPasswordReset,
+  setupCorporatePortal,
 } from '../lib/api.ts';
 import {
   findCountryByName,
@@ -53,7 +54,9 @@ export function AuthView({
   onBack,
   onAuthenticated,
 }: AuthViewProps) {
-  const [mode, setMode] = useState<'signin' | 'register' | 'claim_admin'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'register' | 'claim_admin' | 'forgot'>(
+    initialMode
+  );
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,12 +69,15 @@ export function AuthView({
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [investorType, setInvestorType] =
     useState<InvestorClassification>('Individual Investor');
+  const [resetNote, setResetNote] = useState('');
+  const [resetSentMsg, setResetSentMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const switchMode = (next: 'signin' | 'register' | 'claim_admin') => {
+  const switchMode = (next: 'signin' | 'register' | 'claim_admin' | 'forgot') => {
     setMode(next);
     setError(null);
+    setResetSentMsg(null);
   };
 
   const handleCountrySelect = (picked: CountryOption) => {
@@ -96,28 +102,34 @@ export function AuthView({
     }
   };
 
-  const handleDemoLogin = async () => {
-    if (submitting) return;
-    setError(null);
-    setSubmitting(true);
-    try {
-      const res = await loginDemoInvestor();
-      onAuthenticated(res.investor);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to open sandbox investor.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (submitting) return;
     setError(null);
+    setResetSentMsg(null);
 
     const trimmedEmail = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setError('Enter a valid email address.');
+      return;
+    }
+
+    if (mode === 'forgot') {
+      setSubmitting(true);
+      try {
+        const res = await requestPasswordReset({
+          email: trimmedEmail,
+          note: resetNote.trim() || undefined,
+        });
+        setResetSentMsg(res.message);
+        setResetNote('');
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : 'Unable to submit password reset request.'
+        );
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 
@@ -143,7 +155,7 @@ export function AuthView({
     }
 
     if (mode === 'claim_admin' && fullName.trim().length < 2) {
-      setError('Enter the Master Admin full name.');
+      setError('Enter the Executive Operations Officer full name.');
       return;
     }
 
@@ -153,7 +165,7 @@ export function AuthView({
         const res = await loginInvestor({ email: trimmedEmail, password });
         onAuthenticated(res.investor);
       } else if (mode === 'claim_admin') {
-        const res = await claimMasterAdmin({
+        const res = await setupCorporatePortal({
           fullName: fullName.trim(),
           email: trimmedEmail,
           password,
@@ -204,16 +216,20 @@ export function AuthView({
           <h1 className="font-display text-[22px] font-bold text-[#111827] dark:text-[#F8FAFC] leading-tight">
             {mode === 'signin'
               ? `Sign in to ${brandName}`
-              : mode === 'claim_admin'
-                ? 'Claim Master Admin'
-                : 'Create investor profile'}
+              : mode === 'forgot'
+                ? 'Technical Dept Password Reset'
+                : mode === 'claim_admin'
+                  ? 'Initialize Corporate Portal'
+                  : 'Create investor profile'}
           </h1>
           <p className="mt-1 text-xs text-[#6B7280] dark:text-[#94A3B8] leading-relaxed">
             {mode === 'claim_admin'
-              ? 'First-run owner setup. Once claimed, you control all users, site display, approvals & roles.'
-              : redirectLabel
-                ? `Sign in or register to open ${redirectLabel}.`
-                : 'Access live AI robotics leases, Binance crypto settlement, team rewards & verification.'}
+              ? 'First-run corporate setup for Executive, Finance, Compliance & Technical departments.'
+              : mode === 'forgot'
+                ? 'Submit a password assistance ticket directly to the Nexora AI Technical Department.'
+                : redirectLabel
+                  ? `Sign in or register to open ${redirectLabel}.`
+                  : 'Access live AI robotics leases, Binance crypto settlement, team rewards & verification.'}
           </p>
         </div>
       </div>
@@ -225,7 +241,7 @@ export function AuthView({
               type="button"
               onClick={() => switchMode('signin')}
               className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-colors cursor-pointer ${
-                mode === 'signin'
+                mode === 'signin' || mode === 'forgot'
                   ? 'bg-white dark:bg-[#0F172A] text-[#111827] dark:text-[#F8FAFC] shadow-2xs'
                   : 'text-[#6B7280] dark:text-[#94A3B8]'
               }`}
@@ -443,40 +459,70 @@ export function AuthView({
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="app-password"
-                className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
-              >
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  id="app-password"
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={
-                    mode === 'claim_admin' ? 'At least 8 characters' : 'At least 6 characters'
-                  }
-                  className="w-full h-11 pl-10 pr-11 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[#6B7280] dark:text-[#94A3B8] hover:text-[#111827] dark:hover:text-white hover:bg-[#F3F4F6] dark:hover:bg-[#1E293B] cursor-pointer"
+            {mode === 'forgot' ? (
+              <div>
+                <label
+                  htmlFor="app-reset-note"
+                  className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
                 >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
+                  Verification Note for Technical Department (Optional)
+                </label>
+                <textarea
+                  id="app-reset-note"
+                  rows={2}
+                  value={resetNote}
+                  onChange={(e) => setResetNote(e.target.value)}
+                  placeholder="Account phone number or verification reference..."
+                  className="w-full p-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                />
               </div>
-            </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label
+                    htmlFor="app-password"
+                    className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1]"
+                  >
+                    Password
+                  </label>
+                  {mode === 'signin' && (
+                    <button
+                      type="button"
+                      onClick={() => switchMode('forgot')}
+                      className="text-[11px] font-semibold text-[#2563EB] dark:text-[#60A5FA] hover:underline cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    id="app-password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={
+                      mode === 'claim_admin' ? 'At least 8 characters' : 'At least 6 characters'
+                    }
+                    className="w-full h-11 pl-10 pr-11 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[#6B7280] dark:text-[#94A3B8] hover:text-[#111827] dark:hover:text-white hover:bg-[#F3F4F6] dark:hover:bg-[#1E293B] cursor-pointer"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div
@@ -484,6 +530,13 @@ export function AuthView({
                 className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3 py-2 text-[11px] font-medium text-red-800 dark:text-red-200"
               >
                 {error}
+              </div>
+            )}
+
+            {resetSentMsg && (
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-2.5 text-[11px] font-medium text-emerald-900 dark:text-emerald-100 flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#059669] dark:text-[#34D399] shrink-0 mt-0.5" />
+                <span>{resetSentMsg}</span>
               </div>
             )}
 
@@ -497,12 +550,24 @@ export function AuthView({
                   ? 'Please wait...'
                   : mode === 'signin'
                     ? 'Sign in'
-                    : mode === 'claim_admin'
-                      ? 'Activate Master Admin Account'
-                      : 'Create Investor Account'}
+                    : mode === 'forgot'
+                      ? 'Submit Request to Technical Dept'
+                      : mode === 'claim_admin'
+                        ? 'Activate Corporate Portal'
+                        : 'Create Investor Account'}
               </span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
+
+            {mode === 'forgot' && (
+              <button
+                type="button"
+                onClick={() => switchMode('signin')}
+                className="w-full h-9 rounded-xl border border-[#E5E7EB] dark:border-[#334155] text-xs font-semibold text-[#4B5563] dark:text-[#CBD5E1] cursor-pointer"
+              >
+                Back to Sign in
+              </button>
+            )}
           </form>
         </div>
 
@@ -510,11 +575,11 @@ export function AuthView({
           <div className="rounded-2xl border border-[#C7D2FE] dark:border-indigo-900 bg-[#EEF2FF] dark:bg-indigo-950/60 p-3.5 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-[#1E1B4B] dark:text-indigo-200 inline-flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-[#4338CA] dark:text-indigo-400" />
-                <span>Master Admin not claimed yet</span>
+                <Building2 className="w-3.5 h-3.5 text-[#4338CA] dark:text-indigo-400" />
+                <span>Corporate portal initialization required</span>
               </p>
               <p className="mt-0.5 text-[11px] text-[#3730A3] dark:text-indigo-300 leading-snug">
-                Set up the system Master Admin to control everything system-wide.
+                Initialize Nexora Executive, Finance, Compliance &amp; Technical departments.
               </p>
             </div>
             <button
@@ -522,30 +587,10 @@ export function AuthView({
               onClick={() => switchMode('claim_admin')}
               className="px-3 py-2 rounded-lg bg-[#312E81] text-white text-[11px] font-semibold whitespace-nowrap shrink-0 cursor-pointer"
             >
-              Claim Admin
+              Setup Portal
             </button>
           </div>
         )}
-
-        <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-3.5 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC] inline-flex items-center gap-1.5">
-              <UserCheck className="w-3.5 h-3.5 text-[#059669] dark:text-[#34D399]" />
-              <span>Preview Investor Account</span>
-            </p>
-            <p className="mt-0.5 text-[11px] text-[#6B7280] dark:text-[#94A3B8] leading-snug">
-              Explore live rentals, referrals & rewards as Daniel Meier.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={handleDemoLogin}
-            className="px-3 py-2 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#1E293B] hover:bg-[#F3F4F6] dark:hover:bg-[#334155] text-[#111827] dark:text-[#F8FAFC] text-[11px] font-semibold whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            Open Demo
-          </button>
-        </div>
       </div>
     </div>
   );

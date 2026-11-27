@@ -4,18 +4,20 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Bell,
+  Building2,
   CalendarPlus,
   Check,
   Coins,
   Cpu,
-  Crown,
   Edit3,
+  Eye,
+  EyeOff,
   FileCheck2,
   Globe,
+  KeyRound,
   Megaphone,
   Plus,
   Search,
-  Shield,
   Trash2,
   Upload,
   UserPlus,
@@ -31,9 +33,11 @@ import {
   deleteAdminRobot,
   deleteAdminTransaction,
   deleteAdminUser,
+  dismissPasswordResetRequest,
   formatDateTime,
   formatUsd,
   publishFleetDispatch,
+  resetUserPasswordByTech,
   reviewAdminTransaction,
   reviewUserKyc,
   sendAdminNotification,
@@ -57,6 +61,7 @@ import type {
   AdminOverviewData,
   BinanceCoinSymbol,
   BinanceNetworkCode,
+  CorporateDepartment,
   FleetDispatch,
   InvestorProfile,
   KycStatus,
@@ -77,11 +82,19 @@ interface AdminViewProps {
 type AdminTab = 'transfers' | 'kyc' | 'users' | 'fleet' | 'cms';
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  master_admin: 'Master Admin',
-  admin: 'Admin',
-  moderator: 'Moderator',
+  master_admin: 'Executive Ops',
+  admin: 'Dept Officer',
+  moderator: 'Compliance Desk',
   investor: 'Investor',
 };
+
+const DEPARTMENTS: CorporateDepartment[] = [
+  'Executive Operations',
+  'Finance Department',
+  'Technical Department',
+  'Compliance Department',
+  'Fleet Operations',
+];
 
 const ROBOT_CATEGORIES: RobotCategory[] = [
   'Warehouse & Logistics',
@@ -110,14 +123,24 @@ export function AdminView({
   const [userSearch, setUserSearch] = useState('');
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [editingUser, setEditingUser] = useState<InvestorProfile | null>(null);
+  const [pwResetModal, setPwResetModal] = useState<{
+    user: InvestorProfile;
+    requestId?: string;
+  } | null>(null);
+  const [techNewPw, setTechNewPw] = useState('');
+  const [showTechNewPw, setShowTechNewPw] = useState(false);
+  const [techResetNote, setTechResetNote] = useState('');
 
   // Create user state
   const [newUserFullName, setNewUserFullName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+  const [showNewUserPassword, setShowNewUserPassword] = useState(false);
   const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserCountry, setNewUserCountry] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('investor');
+  const [newUserDepartment, setNewUserDepartment] =
+    useState<CorporateDepartment>('Finance Department');
   const [newUserBalance, setNewUserBalance] = useState('0');
   const [newUserKyc, setNewUserKyc] = useState<KycStatus>('verified');
 
@@ -131,6 +154,8 @@ export function AdminView({
   const [editHeld, setEditHeld] = useState('0');
   const [editKyc, setEditKyc] = useState<KycStatus>('unverified');
   const [editRole, setEditRole] = useState<UserRole>('investor');
+  const [editDepartment, setEditDepartment] =
+    useState<CorporateDepartment>('Finance Department');
   const [editStatus, setEditStatus] = useState<AccountStatus>('active');
   const [editBoostDays, setEditBoostDays] = useState('0');
 
@@ -208,6 +233,7 @@ export function AdminView({
     setEditHeld(String(u.heldBalance));
     setEditKyc(u.kycStatus);
     setEditRole(u.role);
+    setEditDepartment(u.department || 'Finance Department');
     setEditStatus(u.accountStatus);
     setEditBoostDays('0');
   };
@@ -368,6 +394,7 @@ export function AdminView({
         phone: newUserPhone.trim() || undefined,
         country: newUserCountry.trim() || undefined,
         role: newUserRole,
+        department: newUserRole === 'investor' ? undefined : newUserDepartment,
         walletBalance: Number(newUserBalance) || 0,
         kycStatus: newUserKyc,
       });
@@ -379,7 +406,7 @@ export function AdminView({
       setNewUserCountry('');
       setNewUserBalance('0');
       await onRefresh();
-      setFeedback('Account created and synced system-wide.');
+      setFeedback('Account created and synced across Nexora AI departments.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create user.');
     } finally {
@@ -403,14 +430,54 @@ export function AdminView({
         heldBalance: Number(editHeld),
         kycStatus: editKyc,
         role: editingUser.role === 'master_admin' ? undefined : editRole,
+        department:
+          editingUser.role === 'master_admin' || editRole !== 'investor'
+            ? editDepartment
+            : undefined,
         accountStatus: editingUser.role === 'master_admin' ? undefined : editStatus,
         doubleYieldDays: Number(editBoostDays) > 0 ? Number(editBoostDays) : undefined,
       });
       setEditingUser(null);
       await onRefresh();
-      setFeedback('User details, balance & permissions updated live.');
+      setFeedback('User details, balance & department permissions updated live.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update user.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleTechPasswordReset = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!pwResetModal) return;
+    setBusyId('tech-pw-reset');
+    clearStatus();
+    try {
+      const res = await resetUserPasswordByTech(pwResetModal.user.id, {
+        newPassword: techNewPw,
+        resolutionNote: techResetNote.trim() || undefined,
+      });
+      setPwResetModal(null);
+      setTechNewPw('');
+      setTechResetNote('');
+      await onRefresh();
+      setFeedback(`Password reset applied for ${res.user.fullName} by Technical Department.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to reset user password.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDismissPwRequest = async (reqId: string) => {
+    setBusyId(reqId);
+    clearStatus();
+    try {
+      await dismissPasswordResetRequest(reqId);
+      await onRefresh();
+      setFeedback('Password ticket closed by Technical Department.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to dismiss ticket.');
     } finally {
       setBusyId(null);
     }
@@ -654,20 +721,23 @@ export function AdminView({
 
   const activeSite = siteDraft ?? data?.siteConfig;
   const coins = data?.cryptoCoins ?? [];
+  const pendingPwRequests = (data?.passwordResetRequests ?? []).filter(
+    (r) => r.status === 'pending'
+  );
 
   return (
     <div className="pb-6 space-y-4">
       <header className="sticky top-0 z-30 h-14 px-4 bg-white/95 dark:bg-[#0F172A]/95 backdrop-blur-md border-b border-[#E5E7EB] dark:border-[#1E293B] flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-[#1E1B4B] text-white flex items-center justify-center shrink-0">
-            {isMaster ? <Crown className="w-4 h-4 text-[#FBBF24]" /> : <Shield className="w-4 h-4" />}
+            <Building2 className="w-4 h-4 text-[#93C5FD]" />
           </div>
           <div className="min-w-0">
             <h1 className="font-display text-sm font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
-              {isMaster ? 'Master Admin Control' : 'Staff Operations'}
+              Nexora Department Console
             </h1>
             <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] truncate">
-              System-wide CRUD, approvals, CMS & roles
+              Finance · Compliance · Technical · Fleet Ops
             </p>
           </div>
         </div>
@@ -685,7 +755,7 @@ export function AdminView({
         <div className="grid grid-cols-3 bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] rounded-2xl divide-x divide-[#E5E7EB] dark:divide-[#1E293B]">
           <div className="p-3">
             <p className="text-[10px] font-medium text-[#6B7280] dark:text-[#94A3B8]">
-              Pending In/Out
+              Finance Queue
             </p>
             <p className="mt-1 font-mono text-base font-bold text-[#D97706] dark:text-[#FBBF24]">
               {(summary?.pendingDepositsCount ?? 0) + (summary?.pendingWithdrawalsCount ?? 0)}
@@ -696,13 +766,13 @@ export function AdminView({
           </div>
           <div className="p-3">
             <p className="text-[10px] font-medium text-[#6B7280] dark:text-[#94A3B8]">
-              Pending KYC
+              Compliance &amp; Tech
             </p>
             <p className="mt-1 font-mono text-base font-bold text-[#2563EB] dark:text-[#60A5FA]">
-              {summary?.pendingKycCount ?? 0}
+              {(summary?.pendingKycCount ?? 0) + (summary?.pendingPasswordResetsCount ?? 0)}
             </p>
             <p className="text-[10px] text-[#6B7280] dark:text-[#94A3B8]">
-              {summary?.totalUsers ?? 0} users
+              {summary?.pendingKycCount ?? 0} KYC · {summary?.pendingPasswordResetsCount ?? 0} PW
             </p>
           </div>
           <div className="p-3">
@@ -718,15 +788,18 @@ export function AdminView({
           </div>
         </div>
 
-        {/* Scrollable Section Tabs */}
+        {/* Scrollable Corporate Department Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-4 px-4">
           {(
             [
-              ['transfers', `Approvals (${pendingTx.length})`],
-              ['kyc', `KYC (${summary?.pendingKycCount ?? 0})`],
-              ['users', `Users (${allUsers.length})`],
-              ['fleet', 'Fleet & Rentals'],
-              ['cms', 'App CMS & Crypto'],
+              ['transfers', `Finance Dept (${pendingTx.length})`],
+              ['kyc', `Compliance (${summary?.pendingKycCount ?? 0})`],
+              [
+                'users',
+                `Tech & Users (${allUsers.length}${pendingPwRequests.length > 0 ? ` · ${pendingPwRequests.length} PW` : ''})`,
+              ],
+              ['fleet', 'Fleet Ops'],
+              ['cms', 'Comms & Site'],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -1089,9 +1162,81 @@ export function AdminView({
           <div className="space-y-3">
             {!isMaster && (
               <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/50 p-3 text-[11px] text-amber-900 dark:text-amber-200">
-                Only the <strong>Master Admin</strong> can create, edit, delete, promote, or
-                suspend accounts system-wide.
+                Only <strong>Executive Operations</strong> or authorized{' '}
+                <strong>Technical Department</strong> leads can create, edit, reset passwords,
+                or modify department roles system-wide.
               </div>
+            )}
+
+            {/* Technical Department — Password Reset Requests Queue */}
+            {pendingPwRequests.length > 0 && (
+              <section className="rounded-2xl border border-[#C7D2FE] dark:border-indigo-900 bg-[#EEF2FF]/70 dark:bg-indigo-950/40 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-[#1E1B4B] dark:text-indigo-200 inline-flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-[#4338CA] dark:text-indigo-400" />
+                    <span>Technical Dept — Password Reset Requests ({pendingPwRequests.length})</span>
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {pendingPwRequests.map((req) => {
+                    const matchedUser = allUsers.find(
+                      (u) =>
+                        u.id === req.investorId ||
+                        u.email.toLowerCase() === req.email.toLowerCase()
+                    );
+                    return (
+                      <div
+                        key={req.id}
+                        className="rounded-xl border border-[#E5E7EB] dark:border-[#334155] bg-white dark:bg-[#111827] p-3 space-y-2 text-xs"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
+                              {req.investorName || req.email}
+                            </p>
+                            <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] truncate">
+                              {req.email} · {formatDateTime(req.createdAt)}
+                            </p>
+                            {req.note && (
+                              <p className="mt-1 text-[11px] text-[#374151] dark:text-[#CBD5E1] italic">
+                                “{req.note}”
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {isMaster && (
+                          <div className="flex items-center gap-2">
+                            {matchedUser && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPwResetModal({ user: matchedUser, requestId: req.id });
+                                  setTechNewPw('');
+                                  setTechResetNote('');
+                                }}
+                                className="flex-1 h-8 rounded-lg bg-[#2563EB] text-white text-[11px] font-semibold inline-flex items-center justify-center gap-1 cursor-pointer"
+                              >
+                                <KeyRound className="w-3 h-3" />
+                                <span>Set New Password</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              disabled={busyId === req.id}
+                              onClick={() => handleDismissPwRequest(req.id)}
+                              className="h-8 px-3 rounded-lg border border-[#D1D5DB] dark:border-[#334155] text-[11px] font-semibold text-[#4B5563] dark:text-[#CBD5E1] cursor-pointer"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
             )}
 
             <div className="flex items-center gap-2">
@@ -1145,7 +1290,7 @@ export function AdminView({
                           {u.fullName}
                         </p>
                         <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] truncate">
-                          {u.email}
+                          {u.email}{u.department ? ` · ${u.department}` : ''}
                         </p>
                         <p className="text-[10.5px] font-mono text-[#374151] dark:text-[#CBD5E1] mt-0.5">
                           Bal: {formatUsd(u.walletBalance)} · KYC: {u.kycStatus} · Ref:{' '}
@@ -1172,7 +1317,7 @@ export function AdminView({
                   {isMaster && (
                     <div className="pt-2 border-t border-[#F3F4F6] dark:border-[#1E293B] flex flex-wrap items-center gap-2">
                       {!isTargetMaster && (
-                        <div className="flex items-center gap-1 flex-1 min-w-[150px]">
+                        <div className="flex items-center gap-1 flex-1 min-w-[140px]">
                           <Users className="w-3.5 h-3.5 text-[#6B7280] dark:text-[#94A3B8]" />
                           <select
                             aria-label={`Role for ${u.fullName}`}
@@ -1184,8 +1329,8 @@ export function AdminView({
                             className="flex-1 h-9 px-2 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]"
                           >
                             <option value="investor">Investor</option>
-                            <option value="moderator">Moderator</option>
-                            <option value="admin">Admin</option>
+                            <option value="moderator">Compliance Desk</option>
+                            <option value="admin">Dept Officer</option>
                           </select>
                         </div>
                       )}
@@ -1197,6 +1342,19 @@ export function AdminView({
                       >
                         <Edit3 className="w-3 h-3" />
                         <span>Edit</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPwResetModal({ user: u });
+                          setTechNewPw('');
+                          setTechResetNote('');
+                        }}
+                        className="h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] text-[11px] font-semibold text-[#4338CA] dark:text-indigo-300 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <KeyRound className="w-3 h-3" />
+                        <span>Password</span>
                       </button>
 
                       <button
@@ -1948,15 +2106,25 @@ export function AdminView({
               placeholder="Email Address"
               className="w-full h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
             />
-            <input
-              type="text"
-              required
-              minLength={6}
-              value={newUserPassword}
-              onChange={(e) => setNewUserPassword(e.target.value)}
-              placeholder="Temporary Password (min 6 chars)"
-              className="w-full h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
-            />
+            <div className="relative">
+              <input
+                type={showNewUserPassword ? 'text' : 'password'}
+                required
+                minLength={6}
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+                placeholder="Temporary Password (min 6 chars)"
+                className="w-full h-10 pl-3 pr-10 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewUserPassword((p) => !p)}
+                aria-label={showNewUserPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-[#6B7280] dark:text-[#94A3B8] cursor-pointer"
+              >
+                {showNewUserPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
             <div className="space-y-2">
               <CountrySelectField
                 value={newUserCountry}
@@ -1991,8 +2159,8 @@ export function AdminView({
                 className="h-10 px-2 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
               >
                 <option value="investor">Investor</option>
-                <option value="moderator">Moderator</option>
-                <option value="admin">Admin</option>
+                <option value="moderator">Compliance Desk</option>
+                <option value="admin">Dept Officer</option>
               </select>
               <select
                 value={newUserKyc}
@@ -2011,12 +2179,104 @@ export function AdminView({
                 className="h-10 px-2.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-xs text-[#111827] dark:text-[#F8FAFC]"
               />
             </div>
+            {newUserRole !== 'investor' && (
+              <select
+                value={newUserDepartment}
+                onChange={(e) => setNewUserDepartment(e.target.value as CorporateDepartment)}
+                className="w-full h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
+              >
+                {DEPARTMENTS.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               type="submit"
               disabled={busyId === 'create-user'}
               className="w-full h-11 rounded-xl bg-[#2563EB] text-white text-xs font-semibold cursor-pointer"
             >
               Create Account
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Technical Department Password Reset Modal */}
+      {pwResetModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-end justify-center"
+          role="dialog"
+          aria-modal="true"
+        >
+          <form
+            onSubmit={handleTechPasswordReset}
+            className="w-full max-w-[430px] bg-white dark:bg-[#111827] border-t border-[#E5E7EB] dark:border-[#1E293B] rounded-t-3xl p-5 space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <h3 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC] inline-flex items-center gap-1.5">
+                  <KeyRound className="w-4 h-4 text-[#2563EB]" />
+                  <span>Technical Dept Password Reset</span>
+                </h3>
+                <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8] truncate">
+                  {pwResetModal.user.fullName} ({pwResetModal.user.email})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPwResetModal(null)}
+                className="w-8 h-8 rounded-lg border border-[#E5E7EB] dark:border-[#334155] flex items-center justify-center text-[#6B7280] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-[10.5px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1">
+                New Account Password (min 6 characters)
+              </label>
+              <div className="relative">
+                <input
+                  type={showTechNewPw ? 'text' : 'password'}
+                  required
+                  minLength={6}
+                  value={techNewPw}
+                  onChange={(e) => setTechNewPw(e.target.value)}
+                  placeholder="Enter new password for user"
+                  className="w-full h-10 pl-3 pr-10 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowTechNewPw((p) => !p)}
+                  aria-label={showTechNewPw ? 'Hide password' : 'Show password'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-[#6B7280] dark:text-[#94A3B8] cursor-pointer"
+                >
+                  {showTechNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10.5px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1">
+                Technical Department Security Note (Optional)
+              </label>
+              <input
+                type="text"
+                value={techResetNote}
+                onChange={(e) => setTechResetNote(e.target.value)}
+                placeholder="e.g. Identity confirmed via compliance ticket"
+                className="w-full h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={busyId === 'tech-pw-reset'}
+              className="w-full h-11 rounded-xl bg-[#2563EB] text-white text-xs font-semibold cursor-pointer"
+            >
+              Apply Technical Password Reset
             </button>
           </form>
         </div>
@@ -2188,8 +2448,8 @@ export function AdminView({
                       className="w-full h-9 px-2 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
                     >
                       <option value="investor">Investor</option>
-                      <option value="moderator">Moderator</option>
-                      <option value="admin">Admin</option>
+                      <option value="moderator">Compliance Desk</option>
+                      <option value="admin">Dept Officer</option>
                     </select>
                   </div>
                   <div>
@@ -2208,6 +2468,25 @@ export function AdminView({
                 </>
               )}
             </div>
+
+            {(editingUser.role === 'master_admin' || editRole !== 'investor') && (
+              <div>
+                <label className="block text-[10px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
+                  Corporate Department
+                </label>
+                <select
+                  value={editDepartment}
+                  onChange={(e) => setEditDepartment(e.target.value as CorporateDepartment)}
+                  className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
+                >
+                  {DEPARTMENTS.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <button
               type="submit"

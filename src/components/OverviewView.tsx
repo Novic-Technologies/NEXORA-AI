@@ -145,7 +145,7 @@ export function OverviewView({
           <div className="p-4 space-y-3.5">
             <p className="text-xs text-[#4B5563] dark:text-[#CBD5E1] leading-relaxed">
               {site?.heroDescription ||
-                'Select active Nexora AI robots operating across verified hubs. Fund leases via Binance-supported coins with Master Admin settlement oversight.'}
+                'Select active Nexora AI robots operating across verified hubs. Fund leases via Binance-supported coins with Finance Department settlement oversight.'}
             </p>
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -173,21 +173,21 @@ export function OverviewView({
           <div className="p-3.5">
             <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8]">Total Fleet</p>
             <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
-              {stats ? stats.totalFleetUnits : 122}
+              {stats ? stats.totalFleetUnits : '—'}
             </p>
             <p className="text-[10px] text-[#6B7280] dark:text-[#94A3B8]">Deployed units</p>
           </div>
           <div className="p-3.5">
             <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8]">Daily Return</p>
             <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#059669] dark:text-[#34D399]">
-              {stats ? stats.dailyRateRange : '1.42–1.95%'}
+              {stats ? stats.dailyRateRange : '—'}
             </p>
             <p className="text-[10px] text-[#6B7280] dark:text-[#94A3B8]">Accrues live</p>
           </div>
           <div className="p-3.5">
             <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8]">Crypto Assets</p>
             <p className="mt-1 text-base font-bold font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
-              {stats ? stats.supportedCoins : 8} Coins
+              {stats ? `${stats.supportedCoins} Coins` : '—'}
             </p>
             <p className="text-[10px] text-[#6B7280] dark:text-[#94A3B8]">Binance chains</p>
           </div>
@@ -232,7 +232,7 @@ export function OverviewView({
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC] truncate">
                     {investor.kycStatus === 'pending'
-                      ? 'Verification pending Master Admin review'
+                      ? 'Verification pending Compliance review'
                       : 'Complete photo & ID verification'}
                   </p>
                   <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8] truncate mt-0.5">
@@ -471,11 +471,11 @@ export function OverviewView({
               {(site?.howItWorksSteps ?? [
                 {
                   title: '01. Register, upload photo & verify ID',
-                  body: 'Create your account, add your profile photo, submit your government ID (and optional proof of financial ability) for Master Admin approval.',
+                  body: 'Create your account, add your profile photo, and submit your government ID (and optional proof of financial ability) for Compliance Department verification.',
                 },
                 {
-                  title: '02. Deposit crypto with Master Admin review',
-                  body: 'Choose any of the 8 Binance-supported coins, scan or copy the deposit address, and submit your TXID/screenshot. Funds credit as soon as the Master Admin approves.',
+                  title: '02. Deposit crypto with Finance Dept review',
+                  body: 'Choose any of the Binance-supported coins, scan or copy the treasury address, and submit your TXID/screenshot. Funds credit as soon as the Finance Department confirms.',
                 },
                 {
                   title: '03. Lease AI robots, invite team & earn 2x',

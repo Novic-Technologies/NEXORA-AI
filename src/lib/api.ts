@@ -5,6 +5,7 @@ import type {
   BinanceCoinConfig,
   BinanceCoinSymbol,
   BinanceNetworkCode,
+  CorporateDepartment,
   EnrichedMachineRental,
   FleetDispatch,
   IdentityDocType,
@@ -53,6 +54,7 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export interface OverviewResponse {
+  corporateInitialized?: boolean;
   masterAdminClaimed: boolean;
   siteConfig: SiteConfig;
   stats: {
@@ -72,7 +74,7 @@ export function fetchOverview(): Promise<OverviewResponse> {
   return apiRequest<OverviewResponse>('/api/overview');
 }
 
-export async function claimMasterAdmin(payload: {
+export async function setupCorporatePortal(payload: {
   fullName: string;
   email: string;
   password: string;
@@ -81,7 +83,7 @@ export async function claimMasterAdmin(payload: {
   avatarUrl?: string;
 }): Promise<{ token: string; investor: InvestorProfile }> {
   const res = await apiRequest<{ token: string; investor: InvestorProfile }>(
-    '/api/auth/claim-master-admin',
+    '/api/auth/corporate-setup',
     {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -129,16 +131,27 @@ export async function loginInvestor(payload: {
   return res;
 }
 
-export async function loginDemoInvestor(): Promise<{
-  token: string;
-  investor: InvestorProfile;
-}> {
-  const res = await apiRequest<{ token: string; investor: InvestorProfile }>(
-    '/api/auth/demo-investor',
-    { method: 'POST' }
+export function requestPasswordReset(payload: {
+  email: string;
+  note?: string;
+}): Promise<{ ok: boolean; message: string }> {
+  return apiRequest<{ ok: boolean; message: string }>(
+    '/api/auth/password-reset-request',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
   );
-  setAuthToken(res.token);
-  return res;
+}
+
+export function changePassword(payload: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ ok: boolean }> {
+  return apiRequest<{ ok: boolean }>('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function logoutInvestor(): Promise<void> {
@@ -275,7 +288,7 @@ export function fetchTransactions(): Promise<{ transactions: WalletTransaction[]
   return apiRequest<{ transactions: WalletTransaction[] }>('/api/transactions');
 }
 
-// Master Admin / Staff Full CRUD endpoints
+// Corporate Departments Full Operations Endpoints
 export function fetchAdminOverview(): Promise<AdminOverviewData> {
   return apiRequest<AdminOverviewData>('/api/admin/overview');
 }
@@ -308,6 +321,7 @@ export function createAdminUser(payload: {
   country?: string;
   companyName?: string;
   role: UserRole;
+  department?: CorporateDepartment;
   walletBalance?: number;
   kycStatus?: KycStatus;
 }): Promise<{ user: InvestorProfile }> {
@@ -330,6 +344,7 @@ export function updateAdminUser(
     heldBalance: number;
     kycStatus: KycStatus;
     role: UserRole;
+    department: CorporateDepartment;
     accountStatus: AccountStatus;
     doubleYieldDays: number;
   }>
@@ -340,6 +355,25 @@ export function updateAdminUser(
   });
 }
 
+export function resetUserPasswordByTech(
+  userId: string,
+  payload: { newPassword: string; resolutionNote?: string }
+): Promise<{ ok: boolean; user: InvestorProfile }> {
+  return apiRequest(`/api/admin/users/${encodeURIComponent(userId)}/password`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function dismissPasswordResetRequest(
+  requestId: string
+): Promise<{ ok: boolean }> {
+  return apiRequest(
+    `/api/admin/password-requests/${encodeURIComponent(requestId)}/dismiss`,
+    { method: 'POST' }
+  );
+}
+
 export function deleteAdminUser(userId: string): Promise<{ ok: boolean }> {
   return apiRequest(`/api/admin/users/${encodeURIComponent(userId)}`, {
     method: 'DELETE',
@@ -348,7 +382,11 @@ export function deleteAdminUser(userId: string): Promise<{ ok: boolean }> {
 
 export function updateUserRole(
   userId: string,
-  payload: { role?: UserRole; accountStatus?: AccountStatus }
+  payload: {
+    role?: UserRole;
+    department?: CorporateDepartment;
+    accountStatus?: AccountStatus;
+  }
 ): Promise<{ user: InvestorProfile }> {
   return apiRequest(`/api/admin/users/${encodeURIComponent(userId)}/role`, {
     method: 'PATCH',

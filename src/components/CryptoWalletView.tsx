@@ -150,7 +150,7 @@ export function CryptoWalletView({
       setTxHash('');
       setReceiptImageUrl('');
       setSuccessMsg(
-        `Submitted ${formatUsd(res.transaction.amount)} ${selectedCoin.symbol} deposit for Master Admin approval. Your balance updates automatically once approved.`
+        `Submitted ${formatUsd(res.transaction.amount)} ${selectedCoin.symbol} deposit for Finance Department approval. Your balance updates automatically once approved.`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to submit deposit.');
@@ -167,7 +167,7 @@ export function CryptoWalletView({
 
     if (!isVerified) {
       setError(
-        'Identity verification must be approved by the Master Admin before requesting withdrawals.'
+        'Identity verification must be approved by the Compliance Department before requesting withdrawals.'
       );
       return;
     }
@@ -212,7 +212,7 @@ export function CryptoWalletView({
       setWithdrawAddress('');
       setWithdrawMemo('');
       setSuccessMsg(
-        `Withdrawal of ${formatUsd(res.transaction.amount)} ${selectedCoin.symbol} reserved in escrow and queued for Master Admin approval.`
+        `Withdrawal of ${formatUsd(res.transaction.amount)} ${selectedCoin.symbol} reserved in escrow and queued for Finance Department approval.`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to submit withdrawal.');
@@ -472,7 +472,7 @@ export function CryptoWalletView({
                 </p>
                 <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#D97706] dark:text-[#FBBF24] bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
                   <Clock className="w-3 h-3" />
-                  Master Admin Approval
+                  Finance Dept Approval
                 </span>
               </div>
 
@@ -569,7 +569,7 @@ export function CryptoWalletView({
                 <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/60 px-3 py-2.5 text-[11px] text-amber-950 dark:text-amber-100 space-y-1">
                   <p className="font-semibold inline-flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-[#D97706] dark:text-[#FBBF24]" />
-                    <span>Queued for Master Admin Approval</span>
+                    <span>Queued for Finance Dept Approval</span>
                   </p>
                   <p>{successMsg}</p>
                 </div>
@@ -596,7 +596,7 @@ export function CryptoWalletView({
                 </p>
                 <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
                   Your account status is currently <strong>{investor.kycStatus}</strong>.
-                  Submit your photo and ID documents for Master Admin approval before
+                  Submit your photo and ID documents for Compliance Department approval before
                   withdrawing.
                 </p>
                 {onOpenVerification && (
@@ -621,7 +621,7 @@ export function CryptoWalletView({
                 </p>
                 <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#D97706] dark:text-[#FBBF24] bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
                   <Clock className="w-3 h-3" />
-                  Admin Approval
+                  Finance Approval
                 </span>
               </div>
 
@@ -760,7 +760,7 @@ export function CryptoWalletView({
 
               <p className="flex items-center justify-center gap-1 text-[10px] text-[#6B7280] dark:text-[#94A3B8]">
                 <ShieldCheck className="w-3 h-3" />
-                Held safely in escrow until Master Admin sends payout
+                Held safely in escrow until Finance Department sends payout
               </p>
             </form>
           </div>

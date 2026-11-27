@@ -120,7 +120,7 @@ export function VerificationView({
       });
       onUpdated(res.investor);
       setSuccessMsg(
-        'Verification records submitted. The Master Admin will review your documents shortly.'
+        'Verification records submitted. The Compliance Department will review your documents shortly.'
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to submit verification.');
@@ -176,7 +176,7 @@ export function VerificationView({
               {investor.kycStatus === 'verified'
                 ? 'Identity Verified'
                 : investor.kycStatus === 'pending'
-                  ? 'Pending Master Admin Review'
+                  ? 'Pending Compliance Dept Review'
                   : investor.kycStatus === 'rejected'
                     ? 'Verification Declined — Resubmit Required'
                     : 'Verification Not Submitted'}
@@ -185,7 +185,7 @@ export function VerificationView({
               {investor.kycStatus === 'verified'
                 ? 'Your account is verified. Crypto withdrawals and institutional contracts are enabled.'
                 : investor.kycStatus === 'pending'
-                  ? 'Your profile photo, ID documents, and financial details are in the Master Admin review queue.'
+                  ? 'Your profile photo, ID documents, and financial details are in the Compliance Department review queue.'
                   : investor.kycStatus === 'rejected'
                     ? existing?.reviewNote || 'Please upload clearer identity photos and resubmit.'
                     : 'Upload your profile photo and government ID to unlock crypto withdrawals.'}

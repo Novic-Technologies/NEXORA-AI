@@ -44,6 +44,13 @@ export type InvestorClassification =
 
 export type UserRole = 'master_admin' | 'admin' | 'moderator' | 'investor';
 
+export type CorporateDepartment =
+  | 'Executive Operations'
+  | 'Finance Department'
+  | 'Technical Department'
+  | 'Compliance Department'
+  | 'Fleet Operations';
+
 export type AccountStatus = 'active' | 'suspended';
 
 export type KycStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
@@ -68,6 +75,7 @@ export interface VerificationRecords {
 export interface InvestorProfile {
   id: string;
   role: UserRole;
+  department?: CorporateDepartment;
   accountStatus: AccountStatus;
   fullName: string;
   email: string;
@@ -245,6 +253,7 @@ export interface AppNotification {
     | 'referrals'
     | 'mine'
     | 'activity'
+    | 'account'
     | 'admin'
     | 'news'
     | 'rent';
@@ -277,12 +286,26 @@ export interface ReferralSummary {
   teamMembers: TeamMemberSummary[];
 }
 
+export interface PasswordResetRequest {
+  id: string;
+  email: string;
+  investorId?: string;
+  investorName?: string;
+  note?: string;
+  status: 'pending' | 'resolved' | 'dismissed';
+  resolvedByDepartment?: string;
+  resolutionNote?: string;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
 export interface AdminOverviewData {
   summary: {
     totalUsers: number;
     pendingDepositsCount: number;
     pendingWithdrawalsCount: number;
     pendingKycCount: number;
+    pendingPasswordResetsCount: number;
     pendingDepositVolume: number;
     pendingWithdrawalVolume: number;
     activeRentalsCount: number;
@@ -292,6 +315,7 @@ export interface AdminOverviewData {
   users: InvestorProfile[];
   pendingTransactions: WalletTransaction[];
   allTransactions: WalletTransaction[];
+  passwordResetRequests: PasswordResetRequest[];
   rentals: EnrichedMachineRental[];
   robots: RobotMachine[];
   dispatches: FleetDispatch[];

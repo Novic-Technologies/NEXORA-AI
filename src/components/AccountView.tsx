@@ -6,14 +6,21 @@ import {
   Check,
   ChevronRight,
   Copy,
+  Eye,
+  EyeOff,
   Gift,
+  KeyRound,
   LogOut,
   Monitor,
   Moon,
   Save,
   Sun,
 } from 'lucide-react';
-import { formatDateTime, updateInvestorProfile } from '../lib/api.ts';
+import {
+  changePassword,
+  formatDateTime,
+  updateInvestorProfile,
+} from '../lib/api.ts';
 import {
   findCountryByName,
   formatInternationalPhone,
@@ -66,6 +73,14 @@ export function AccountView({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [copiedRef, setCopiedRef] = useState(false);
+
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSuccess, setPwSuccess] = useState<string | null>(null);
 
   const handlePhotoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -131,7 +146,7 @@ export function AccountView({
             Profile & Preferences
           </h1>
           <p className="text-[10.5px] font-mono text-[#6B7280] dark:text-[#94A3B8] truncate">
-            {investor.role.toUpperCase()} · Joined {formatDateTime(investor.createdAt)}
+            {investor.department || 'Verified Investor Portal'} · Joined {formatDateTime(investor.createdAt)}
           </p>
         </div>
       </header>
@@ -419,6 +434,136 @@ export function AccountView({
           >
             <Save className="w-3.5 h-3.5" />
             <span>{saving ? 'Saving...' : 'Save Profile Details'}</span>
+          </button>
+        </form>
+
+        {/* Password & Account Security (Technical Department) */}
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (pwSaving) return;
+            setPwError(null);
+            setPwSuccess(null);
+            if (currentPw.length < 6) {
+              setPwError('Enter your current password.');
+              return;
+            }
+            if (newPw.length < 6) {
+              setPwError('New password must be at least 6 characters.');
+              return;
+            }
+            setPwSaving(true);
+            try {
+              await changePassword({
+                currentPassword: currentPw,
+                newPassword: newPw,
+              });
+              setCurrentPw('');
+              setNewPw('');
+              setPwSuccess('Password updated and logged with Nexora Technical Department.');
+            } catch (err) {
+              setPwError(
+                err instanceof Error ? err.message : 'Unable to update password.'
+              );
+            } finally {
+              setPwSaving(false);
+            }
+          }}
+          className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-4 space-y-3"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] dark:bg-[#1E3A8A]/40 text-[#2563EB] dark:text-[#60A5FA] flex items-center justify-center shrink-0">
+              <KeyRound className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-[#111827] dark:text-[#F8FAFC]">
+                Password &amp; Account Security
+              </p>
+              <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
+                Managed with Nexora Technical Department encryption
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="sec-cur-pw"
+              className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
+            >
+              Current Password
+            </label>
+            <div className="relative">
+              <input
+                id="sec-cur-pw"
+                type={showCurrentPw ? 'text' : 'password'}
+                required
+                value={currentPw}
+                onChange={(e) => setCurrentPw(e.target.value)}
+                placeholder="Enter current password"
+                className="w-full h-11 pl-3.5 pr-11 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPw((p) => !p)}
+                aria-label={showCurrentPw ? 'Hide current password' : 'Show current password'}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[#6B7280] dark:text-[#94A3B8] cursor-pointer"
+              >
+                {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="sec-new-pw"
+              className="block text-[11px] font-semibold text-[#374151] dark:text-[#CBD5E1] mb-1"
+            >
+              New Password
+            </label>
+            <div className="relative">
+              <input
+                id="sec-new-pw"
+                type={showNewPw ? 'text' : 'password'}
+                required
+                minLength={6}
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                placeholder="Minimum 6 characters"
+                className="w-full h-11 pl-3.5 pr-11 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPw((p) => !p)}
+                aria-label={showNewPw ? 'Hide new password' : 'Show new password'}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[#6B7280] dark:text-[#94A3B8] cursor-pointer"
+              >
+                {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {pwError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 px-3 py-2 text-[11px] font-medium text-red-800 dark:text-red-200"
+            >
+              {pwError}
+            </div>
+          )}
+
+          {pwSuccess && (
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-2 text-[11px] font-medium text-[#059669] dark:text-[#34D399]">
+              {pwSuccess}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={pwSaving}
+            className="w-full h-11 rounded-xl bg-[#111827] dark:bg-[#2563EB] text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer"
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>{pwSaving ? 'Updating Password...' : 'Update Account Password'}</span>
           </button>
         </form>
 

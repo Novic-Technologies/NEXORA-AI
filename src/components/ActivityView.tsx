@@ -167,7 +167,7 @@ export function ActivityView({
                     </p>
                     {tx.adminNote && (
                       <p className="text-[10.5px] text-[#64748B] dark:text-[#94A3B8] italic">
-                        Admin note: {tx.adminNote}
+                        Department note: {tx.adminNote}
                       </p>
                     )}
                     {hashOrAddress && (

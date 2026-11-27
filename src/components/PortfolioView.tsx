@@ -6,17 +6,17 @@ import {
   BadgeCheck,
   Bell,
   Bot,
+  Building2,
   CheckCircle2,
   ChevronRight,
   Clock,
   Coins,
-  Crown,
   FileText,
   Gift,
   Layers,
   LogOut,
   Settings,
-  Shield,
+  ShieldCheck,
   TrendingUp,
   Wallet,
 } from 'lucide-react';
@@ -180,10 +180,14 @@ export function PortfolioView({
             }`}
           >
             {investor.role === 'master_admin'
-              ? 'MASTER'
+              ? 'EXEC OPS'
               : investor.role === 'admin'
-                ? 'ADMIN'
-                : investor.kycStatus.toUpperCase()}
+                ? investor.department
+                  ? investor.department.toUpperCase()
+                  : 'CORP OPS'
+                : investor.role === 'moderator'
+                  ? 'COMPLIANCE'
+                  : investor.kycStatus.toUpperCase()}
           </span>
         </div>
 
@@ -238,7 +242,7 @@ export function PortfolioView({
               </p>
               <p className="text-[11px] text-amber-900 dark:text-amber-200 mt-0.5">
                 {investor.kycStatus === 'pending'
-                  ? 'Waiting for Master Admin sign-off on your uploaded ID.'
+                  ? 'Waiting for Compliance Department sign-off on your uploaded ID.'
                   : 'Submit photo, ID & optional financial proof to unlock withdrawals.'}
               </p>
             </div>
@@ -246,7 +250,7 @@ export function PortfolioView({
           </button>
         )}
 
-        {/* Staff Console Entry */}
+        {/* Corporate Department Console Entry */}
         {isStaff && onOpenAdmin && (
           <button
             type="button"
@@ -256,19 +260,17 @@ export function PortfolioView({
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
                 {investor.role === 'master_admin' ? (
-                  <Crown className="w-4 h-4 text-[#FBBF24]" />
+                  <Building2 className="w-4 h-4 text-[#93C5FD]" />
                 ) : (
-                  <Shield className="w-4 h-4 text-[#93C5FD]" />
+                  <ShieldCheck className="w-4 h-4 text-[#93C5FD]" />
                 )}
               </div>
               <div className="text-left">
                 <p className="text-xs font-bold">
-                  {investor.role === 'master_admin'
-                    ? 'Open Master Admin Console'
-                    : 'Open Staff Operations Console'}
+                  Open Corporate Department Console
                 </p>
                 <p className="text-[10.5px] text-[#C7D2FE]">
-                  Full CRUD control: users, roles, site display, fleet & approvals
+                  Finance, Compliance, Technical &amp; Fleet Operations
                 </p>
               </div>
             </div>
@@ -375,7 +377,7 @@ export function PortfolioView({
             <p className="text-xs font-bold text-amber-950 dark:text-amber-100 inline-flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-[#D97706] dark:text-[#FBBF24]" />
               <span>
-                {pendingTransfers.length} Transfer{pendingTransfers.length > 1 ? 's' : ''} Pending Master Admin Approval
+                {pendingTransfers.length} Transfer{pendingTransfers.length > 1 ? 's' : ''} Pending Finance Dept Approval
               </span>
             </p>
             {pendingTransfers.map((tx) => (

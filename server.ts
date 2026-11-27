@@ -13,11 +13,13 @@ import type {
   BinanceCoinConfig,
   BinanceCoinSymbol,
   BinanceNetworkCode,
+  CorporateDepartment,
   FleetDispatch,
   IdentityDocType,
   InvestorClassification,
   KycStatus,
   MachineRental,
+  PasswordResetRequest,
   RobotCategory,
   RobotMachine,
   TeamMemberSummary,
@@ -26,7 +28,6 @@ import type {
 } from './src/types.ts';
 import {
   createNotificationRecord,
-  DEMO_INVESTOR_EMAIL,
   enrichRental,
   generateReferralCode,
   hasMasterAdmin,
@@ -80,6 +81,20 @@ const VALID_ROBOT_CATEGORIES: RobotCategory[] = [
 
 const ASSIGNABLE_ROLES: UserRole[] = ['investor', 'moderator', 'admin'];
 const VALID_KYC_STATUSES: KycStatus[] = ['unverified', 'pending', 'verified', 'rejected'];
+const VALID_DEPARTMENTS: CorporateDepartment[] = [
+  'Executive Operations',
+  'Finance Department',
+  'Technical Department',
+  'Compliance Department',
+  'Fleet Operations',
+];
+
+function departmentForRole(role: UserRole): CorporateDepartment | undefined {
+  if (role === 'master_admin') return 'Executive Operations';
+  if (role === 'admin') return 'Finance Department';
+  if (role === 'moderator') return 'Compliance Department';
+  return undefined;
+}
 
 function signSessionToken(investorId: string): string {
   const payload = Buffer.from(
@@ -209,8 +224,11 @@ function getCoinNetworkFromDb(
 }
 
 function syncEnvMasterAdmin(): void {
-  const envEmail = process.env.MASTER_ADMIN_EMAIL?.trim().toLowerCase();
-  const envPassword = process.env.MASTER_ADMIN_PASSWORD;
+  const envEmail = (process.env.CORPORATE_OPS_EMAIL || process.env.MASTER_ADMIN_EMAIL)
+    ?.trim()
+    .toLowerCase();
+  const envPassword =
+    process.env.CORPORATE_OPS_PASSWORD || process.env.MASTER_ADMIN_PASSWORD;
   if (!envEmail || !envPassword) return;
 
   const db = loadDatabase();
@@ -218,6 +236,7 @@ function syncEnvMasterAdmin(): void {
   const { hash, salt } = hashPassword(envPassword);
   if (existing) {
     existing.role = 'master_admin';
+    existing.department = existing.department || 'Executive Operations';
     existing.accountStatus = 'active';
     existing.kycStatus = 'verified';
     existing.passwordHash = hash;
@@ -226,25 +245,26 @@ function syncEnvMasterAdmin(): void {
   } else {
     const usedCodes = new Set(db.investors.map((i) => i.referralCode));
     db.investors.unshift({
-      id: `inv_master_${crypto.randomUUID().slice(0, 8)}`,
+      id: `inv_ops_${crypto.randomUUID().slice(0, 8)}`,
       role: 'master_admin',
+      department: 'Executive Operations',
       accountStatus: 'active',
-      fullName: 'Nexora Master Admin',
+      fullName: 'Nexora Operations Director',
       email: envEmail,
       phone: '+41 44 580 1200',
-      companyName: 'Nexora AI Executive Treasury',
+      companyName: 'Nexora AI Corporate Operations',
       country: 'Switzerland',
       city: 'Zurich',
       investorType: 'Institutional Fund',
       kycStatus: 'verified',
-      walletBalance: 25000,
+      walletBalance: 0,
       heldBalance: 0,
-      totalDeposited: 25000,
+      totalDeposited: 0,
       totalWithdrawn: 0,
       totalYieldCollected: 0,
-      referralCode: generateReferralCode('Nexora Master', usedCodes),
+      referralCode: generateReferralCode('Nexora Ops', usedCodes),
       referralBonusEarned: 0,
-      hasApprovedDeposit: true,
+      hasApprovedDeposit: false,
       createdAt: new Date().toISOString(),
       passwordHash: hash,
       passwordSalt: salt,
@@ -292,7 +312,7 @@ function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunctio
   }
   if (found.accountStatus === 'suspended') {
     res.status(403).json({
-      error: 'This account has been suspended by the Master Admin.',
+      error: 'This account has been suspended by Nexora Compliance & Technical Support.',
     });
     return;
   }
@@ -304,7 +324,7 @@ function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunctio
 function requireStaff(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
   const role = req.investor?.role;
   if (role !== 'master_admin' && role !== 'admin' && role !== 'moderator') {
-    res.status(403).json({ error: 'Admin privileges required.' });
+    res.status(403).json({ error: 'Corporate department authorization required.' });
     return;
   }
   next();
@@ -316,7 +336,9 @@ function requireMasterAdmin(
   next: NextFunction
 ): void {
   if (req.investor?.role !== 'master_admin') {
-    res.status(403).json({ error: 'Only the Master Admin can perform this action.' });
+    res.status(403).json({
+      error: 'Requires Executive or Technical Department authorization.',
+    });
     return;
   }
   next();
@@ -448,7 +470,7 @@ async function startServer() {
     const notif = createNotificationRecord(db, params);
     sendToUser(params.userId, {
       type: 'notification:new',
-      notificationItem: notif,
+      appNotification: notif,
       notification: params.title,
     });
     return notif;
@@ -488,6 +510,15 @@ async function startServer() {
           syncRentalMultiplier(r, 1);
           changed = true;
         }
+        const enriched = enrichRental(r);
+        if (enriched.daysElapsed >= r.cycleDays && r.status === 'active') {
+          r.status = 'completed';
+          const robot = db.robots.find((rb) => rb.id === r.robotId);
+          if (robot) {
+            robot.availableUnits = Math.min(robot.totalUnits, robot.availableUnits + r.quantity);
+          }
+          changed = true;
+        }
       }
     }
     if (changed) {
@@ -519,6 +550,7 @@ async function startServer() {
     const maxRate = db.robots.length ? Math.max(...db.robots.map((r) => r.dailyReturnRate)) : 0;
 
     res.json({
+      corporateInitialized: hasMasterAdmin(db),
       masterAdminClaimed: hasMasterAdmin(db),
       siteConfig: db.siteConfig,
       stats: {
@@ -535,11 +567,11 @@ async function startServer() {
     });
   });
 
-  // First-run Master Admin claim (locks permanently once claimed or when env var is set)
-  app.post('/api/auth/claim-master-admin', (req: Request, res: Response) => {
+  // First-run Corporate Operations portal setup (locks once initialized or set via env)
+  const handleCorporateSetup = (req: Request, res: Response) => {
     const db = loadDatabase();
     if (hasMasterAdmin(db)) {
-      res.status(403).json({ error: 'Master Admin account is already claimed.' });
+      res.status(403).json({ error: 'Corporate Operations portal is already initialized.' });
       return;
     }
 
@@ -552,15 +584,15 @@ async function startServer() {
     const avatarUrl = validateSafeImageRef(body.avatarUrl);
 
     if (fullName.length < 2 || fullName.length > 100) {
-      res.status(400).json({ error: 'Enter a valid full name for Master Admin.' });
+      res.status(400).json({ error: 'Enter a valid full name for Operations Director.' });
       return;
     }
     if (!isValidEmail(email)) {
-      res.status(400).json({ error: 'Enter a valid Master Admin email address.' });
+      res.status(400).json({ error: 'Enter a valid corporate email address.' });
       return;
     }
     if (password.length < 8 || password.length > 128) {
-      res.status(400).json({ error: 'Master Admin password must be at least 8 characters.' });
+      res.status(400).json({ error: 'Corporate access password must be at least 8 characters.' });
       return;
     }
     if (db.investors.some((inv) => inv.email === email)) {
@@ -570,50 +602,54 @@ async function startServer() {
 
     const usedCodes = new Set(db.investors.map((i) => i.referralCode));
     const { hash, salt } = hashPassword(password);
-    const masterAdmin: StoredInvestor = {
-      id: `inv_master_${crypto.randomUUID().slice(0, 8)}`,
+    const opsDirector: StoredInvestor = {
+      id: `inv_ops_${crypto.randomUUID().slice(0, 8)}`,
       role: 'master_admin',
+      department: 'Executive Operations',
       accountStatus: 'active',
       fullName,
       email,
       phone: phone || '+41 44 580 1200',
-      companyName: 'Nexora AI Executive Treasury',
+      companyName: 'Nexora AI Corporate Operations',
       country: country || 'Switzerland',
       city: 'Zurich',
       avatarUrl,
       investorType: 'Institutional Fund',
       kycStatus: 'verified',
-      walletBalance: 25000,
+      walletBalance: 0,
       heldBalance: 0,
-      totalDeposited: 25000,
+      totalDeposited: 0,
       totalWithdrawn: 0,
       totalYieldCollected: 0,
       referralCode: generateReferralCode(fullName, usedCodes),
       referralBonusEarned: 0,
-      hasApprovedDeposit: true,
+      hasApprovedDeposit: false,
       createdAt: new Date().toISOString(),
       passwordHash: hash,
       passwordSalt: salt,
     };
 
-    db.investors.unshift(masterAdmin);
+    db.investors.unshift(opsDirector);
     createNotificationRecord(db, {
-      userId: masterAdmin.id,
-      title: 'Master Admin Console Activated',
+      userId: opsDirector.id,
+      title: 'Corporate Operations Portal Activated',
       message:
-        'You now have full control over all accounts, roles, crypto approvals, site content, machines, and fleet dispatches.',
+        'Finance, Compliance, Technical, and Fleet Operations modules are active across the platform.',
       category: 'admin',
       actionScreen: 'admin',
     });
     saveDatabase(db);
 
-    const token = signSessionToken(masterAdmin.id);
+    const token = signSessionToken(opsDirector.id);
     setSessionCookie(req, res, token);
     res.status(201).json({
       token,
-      investor: sanitizeInvestor(masterAdmin),
+      investor: sanitizeInvestor(opsDirector),
     });
-  });
+  };
+
+  app.post('/api/auth/corporate-setup', handleCorporateSetup);
+  app.post('/api/auth/claim-master-admin', handleCorporateSetup);
 
   app.post('/api/auth/register', (req: Request, res: Response) => {
     const body = req.body as Record<string, unknown>;
@@ -750,7 +786,7 @@ async function startServer() {
     syncEnvMasterAdmin();
     const db = loadDatabase();
     const investor = db.investors.find((inv) => inv.email === email);
-    if (!investor || investor.isDemoAccount) {
+    if (!investor) {
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
     }
@@ -760,7 +796,7 @@ async function startServer() {
     }
     if (investor.accountStatus === 'suspended') {
       res.status(403).json({
-        error: 'This account is suspended. Contact the Master Admin.',
+        error: 'This account is suspended. Contact Nexora Compliance or Technical Support.',
       });
       return;
     }
@@ -773,25 +809,115 @@ async function startServer() {
     });
   });
 
-  // Passwordless sandbox demo investor entry for testing investor workflows
-  app.post('/api/auth/demo-investor', (req: Request, res: Response) => {
+  // Public password recovery request -> queued for Nexora Technical Department
+  app.post('/api/auth/password-reset-request', (req: Request, res: Response) => {
+    const body = req.body as Record<string, unknown>;
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 280) : '';
+
+    if (!isValidEmail(email)) {
+      res.status(400).json({ error: 'Enter a valid email address.' });
+      return;
+    }
+
     const db = loadDatabase();
-    const demo = db.investors.find((inv) => inv.email === DEMO_INVESTOR_EMAIL);
-    if (!demo) {
-      res.status(404).json({ error: 'Sandbox investor is unavailable.' });
-      return;
+    const matched = db.investors.find((inv) => inv.email === email);
+    const ticket: PasswordResetRequest = {
+      id: `pwr_${crypto.randomUUID().slice(0, 10)}`,
+      email,
+      investorId: matched?.id,
+      investorName: matched?.fullName,
+      note: note || undefined,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    db.passwordResetRequests.unshift(ticket);
+    if (db.passwordResetRequests.length > 200) {
+      db.passwordResetRequests = db.passwordResetRequests.slice(0, 200);
     }
-    if (demo.accountStatus === 'suspended') {
-      res.status(403).json({ error: 'Sandbox investor account is currently suspended.' });
-      return;
+
+    if (matched) {
+      notifyUser(db, {
+        userId: matched.id,
+        title: 'Password Recovery Logged — Technical Dept',
+        message:
+          'Your password recovery request was logged with the Nexora Technical Department for verification and reset.',
+        category: 'system',
+        actionScreen: 'account',
+      });
     }
-    const token = signSessionToken(demo.id);
-    setSessionCookie(req, res, token);
-    res.json({
-      token,
-      investor: sanitizeInvestor(demo),
+
+    saveDatabase(db);
+    broadcastToStaff({
+      type: 'admin:queue_updated',
+      notification: `Technical Dept: New password reset ticket for ${email}`,
+    });
+
+    res.status(201).json({
+      ok: true,
+      message:
+        'If an account matches this email, the Nexora Technical Department has logged your password recovery request.',
     });
   });
+
+  // Authenticated user password change (managed by Technical Department policies)
+  app.post(
+    '/api/auth/change-password',
+    requireAuth,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const currentPassword =
+        typeof body.currentPassword === 'string' ? body.currentPassword : '';
+      const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+
+      const db = loadDatabase();
+      const target = db.investors.find((inv) => inv.id === req.investor!.id);
+      if (!target) {
+        res.status(404).json({ error: 'Account not found.' });
+        return;
+      }
+
+      if (!verifyPassword(currentPassword, target.passwordHash, target.passwordSalt)) {
+        res.status(400).json({ error: 'Current password is incorrect.' });
+        return;
+      }
+
+      const minLen = target.role === 'master_admin' ? 8 : 6;
+      if (newPassword.length < minLen || newPassword.length > 128) {
+        res.status(400).json({
+          error: `New password must be between ${minLen} and 128 characters.`,
+        });
+        return;
+      }
+
+      const { hash, salt } = hashPassword(newPassword);
+      target.passwordHash = hash;
+      target.passwordSalt = salt;
+
+      for (const reqItem of db.passwordResetRequests) {
+        if (
+          reqItem.status === 'pending' &&
+          (reqItem.investorId === target.id || reqItem.email === target.email)
+        ) {
+          reqItem.status = 'resolved';
+          reqItem.resolvedByDepartment = 'Nexora Technical Department (Self-Service)';
+          reqItem.resolvedAt = new Date().toISOString();
+        }
+      }
+
+      notifyUser(db, {
+        userId: target.id,
+        title: 'Password Updated · Technical Department',
+        message:
+          'Your account credentials were updated and confirmed by the Nexora Technical Department.',
+        category: 'system',
+        actionScreen: 'account',
+      });
+      saveDatabase(db);
+
+      res.json({ ok: true });
+    }
+  );
 
   app.post('/api/auth/logout', (req: Request, res: Response) => {
     clearSessionCookie(req, res);
@@ -920,7 +1046,7 @@ async function startServer() {
       notifyUser(db, {
         userId: target.id,
         title: 'KYC Verification Submitted',
-        message: 'Your identity records have been queued for Master Admin review.',
+        message: 'Your identity records have been queued for Nexora Compliance Department review.',
         category: 'kyc',
         actionScreen: 'verification',
       });
@@ -1059,7 +1185,7 @@ async function startServer() {
       userId: investor.id,
       title: `$${cleanAmount.toLocaleString()} ${coinSymbol} Deposit Queued`,
       message:
-        'Your transfer proof is waiting for Master Admin verification. Your balance will update as soon as it is approved.',
+        'Your transfer proof is waiting for Finance Department verification. Your balance will update as soon as it is approved.',
       category: 'transfer',
       actionScreen: 'activity',
     });
@@ -1106,7 +1232,8 @@ async function startServer() {
 
     if (investor.kycStatus !== 'verified' && investor.role !== 'master_admin') {
       res.status(403).json({
-        error: 'Identity verification must be approved by the Master Admin before withdrawing.',
+        error:
+          'Identity verification must be approved by the Compliance Department before withdrawing.',
       });
       return;
     }
@@ -1168,7 +1295,7 @@ async function startServer() {
     notifyUser(db, {
       userId: investor.id,
       title: `$${cleanAmount.toLocaleString()} ${coinSymbol} Withdrawal Held in Escrow`,
-      message: 'Your payout request is queued for Master Admin settlement approval.',
+      message: 'Your payout request is queued for Finance Department settlement approval.',
       category: 'transfer',
       actionScreen: 'activity',
     });
@@ -1367,7 +1494,7 @@ async function startServer() {
   });
 
   // ============================================================================
-  // MASTER ADMIN & STAFF FULL CRUD OPERATIONS API
+  // CORPORATE DEPARTMENTS OPERATIONS API
   // ============================================================================
 
   app.get(
@@ -1379,6 +1506,9 @@ async function startServer() {
       const pendingTransactions = db.transactions.filter((t) => t.status === 'pending');
       const pendingDeposits = pendingTransactions.filter((t) => t.type === 'deposit');
       const pendingWithdrawals = pendingTransactions.filter((t) => t.type === 'withdraw');
+      const pendingPasswordResets = db.passwordResetRequests.filter(
+        (r) => r.status === 'pending'
+      );
 
       res.json({
         summary: {
@@ -1386,6 +1516,7 @@ async function startServer() {
           pendingDepositsCount: pendingDeposits.length,
           pendingWithdrawalsCount: pendingWithdrawals.length,
           pendingKycCount: db.investors.filter((u) => u.kycStatus === 'pending').length,
+          pendingPasswordResetsCount: pendingPasswordResets.length,
           pendingDepositVolume: Number(
             pendingDeposits.reduce((s, t) => s + t.amount, 0).toFixed(2)
           ),
@@ -1404,6 +1535,7 @@ async function startServer() {
         users: db.investors.map(sanitizeInvestor),
         pendingTransactions,
         allTransactions: db.transactions.slice(0, 120),
+        passwordResetRequests: db.passwordResetRequests.slice(0, 100),
         rentals: db.rentals.map(enrichRental),
         robots: db.robots,
         dispatches: db.dispatches,
@@ -1450,9 +1582,7 @@ async function startServer() {
         return;
       }
 
-      const reviewerLabel = `${req.investor!.fullName} (${
-        req.investor!.role === 'master_admin' ? 'Master Admin' : 'Admin'
-      })`;
+      const reviewerLabel = req.investor!.department || 'Nexora Finance Department';
       const now = new Date().toISOString();
 
       let referrerUpdated: StoredInvestor | undefined;
@@ -1469,7 +1599,8 @@ async function startServer() {
           notifyUser(db, {
             userId: investor.id,
             title: `$${tx.amount.toLocaleString()} ${tx.coinSymbol || 'Crypto'} Deposit Approved`,
-            message: 'Funds are now available in your wallet to rent AI robotic machines.',
+            message:
+              'Approved by Nexora Finance Department. Funds are now available in your wallet to rent AI robotic machines.',
             category: 'transfer',
             actionScreen: 'mine',
           });
@@ -1625,7 +1756,7 @@ async function startServer() {
       target.kycStatus = action === 'approve' ? 'verified' : 'rejected';
       if (target.verification) {
         target.verification.reviewedAt = new Date().toISOString();
-        target.verification.reviewedBy = req.investor!.fullName;
+        target.verification.reviewedBy = 'Nexora Compliance Department';
         target.verification.reviewNote = reviewNote || undefined;
       }
 
@@ -1634,7 +1765,7 @@ async function startServer() {
         title: action === 'approve' ? 'Identity Verified' : 'Verification Needs Update',
         message:
           action === 'approve'
-            ? 'Your KYC documents were approved. Crypto withdrawals are now unlocked.'
+            ? 'Your KYC documents were approved by the Compliance Department. Crypto withdrawals are now unlocked.'
             : reviewNote || 'Please upload clearer identity photos and resubmit.',
         category: 'kyc',
         actionScreen: 'verification',
@@ -1656,7 +1787,7 @@ async function startServer() {
     }
   );
 
-  // Master Admin ONLY: Create a new user account directly
+  // Technical / Executive Department: Provision a new user account directly
   app.post(
     '/api/admin/users',
     requireAuth,
@@ -1671,6 +1802,12 @@ async function startServer() {
       const companyName =
         typeof body.companyName === 'string' ? body.companyName.trim() : 'Personal Portfolio';
       const role = typeof body.role === 'string' ? (body.role.trim() as UserRole) : 'investor';
+      const departmentRaw =
+        typeof body.department === 'string' ? (body.department.trim() as CorporateDepartment) : undefined;
+      const department =
+        departmentRaw && VALID_DEPARTMENTS.includes(departmentRaw)
+          ? departmentRaw
+          : departmentForRole(role);
       const walletBalance = Math.max(0, Number(body.walletBalance ?? 0) || 0);
       const kycStatus = VALID_KYC_STATUSES.includes(body.kycStatus as KycStatus)
         ? (body.kycStatus as KycStatus)
@@ -1696,6 +1833,7 @@ async function startServer() {
       const created: StoredInvestor = {
         id: `inv_${crypto.randomUUID().slice(0, 12)}`,
         role,
+        department,
         accountStatus: 'active',
         fullName,
         email,
@@ -1720,8 +1858,8 @@ async function startServer() {
       db.investors.push(created);
       createNotificationRecord(db, {
         userId: created.id,
-        title: `Account Provisioned by Master Admin`,
-        message: `Your ${db.siteConfig.brandName} account is ready with role ${role.toUpperCase()}.`,
+        title: `Account Provisioned by Nexora Operations`,
+        message: `Your ${db.siteConfig.brandName} account is ready${department ? ` (${department})` : ''}.`,
         category: 'system',
         actionScreen: 'mine',
       });
@@ -1732,7 +1870,7 @@ async function startServer() {
     }
   );
 
-  // Master Admin ONLY: Full CRUD update on any user's data, balance, KYC, role, or status
+  // Full CRUD update on user profile, balance, KYC, department role, or status
   app.patch(
     '/api/admin/users/:id',
     requireAuth,
@@ -1804,6 +1942,18 @@ async function startServer() {
       if (!isTargetMaster) {
         if (typeof body.role === 'string' && ASSIGNABLE_ROLES.includes(body.role as UserRole)) {
           target.role = body.role as UserRole;
+          if (target.role === 'investor') {
+            target.department = undefined;
+          } else if (!target.department) {
+            target.department = departmentForRole(target.role);
+          }
+        }
+        if (
+          typeof body.department === 'string' &&
+          VALID_DEPARTMENTS.includes(body.department as CorporateDepartment)
+        ) {
+          target.department =
+            target.role === 'investor' ? undefined : (body.department as CorporateDepartment);
         }
         if (body.accountStatus === 'active' || body.accountStatus === 'suspended') {
           target.accountStatus = body.accountStatus;
@@ -1812,8 +1962,8 @@ async function startServer() {
 
       notifyUser(db, {
         userId: target.id,
-        title: 'Account Updated by Master Admin',
-        message: 'Your profile, balance, or permissions were updated system-wide.',
+        title: 'Account Updated · Nexora Operations',
+        message: 'Your profile, balance, or department status was updated.',
         category: 'admin',
         actionScreen: 'mine',
       });
@@ -1828,7 +1978,7 @@ async function startServer() {
       sendToUser(target.id, {
         type: 'investor:updated',
         investor: sanitized,
-        notification: 'Your account details were updated by Master Admin.',
+        notification: 'Your account details were updated by Nexora Operations.',
       });
       sendToUser(target.id, { type: 'rentals:refresh' });
       broadcastToStaff({ type: 'admin:queue_updated' });
@@ -1837,7 +1987,95 @@ async function startServer() {
     }
   );
 
-  // Master Admin ONLY: Delete a non-master account
+  // Technical Department: Set or reset any user's password directly
+  app.post(
+    '/api/admin/users/:id/password',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+      const resolutionNote =
+        typeof body.resolutionNote === 'string' ? body.resolutionNote.trim().slice(0, 240) : '';
+
+      if (newPassword.length < 6 || newPassword.length > 128) {
+        res.status(400).json({ error: 'New password must be between 6 and 128 characters.' });
+        return;
+      }
+
+      const db = loadDatabase();
+      const target = db.investors.find((u) => u.id === req.params.id);
+      if (!target) {
+        res.status(404).json({ error: 'User account not found.' });
+        return;
+      }
+      if (target.role === 'master_admin' && target.id !== req.investor!.id) {
+        res.status(403).json({
+          error: 'Executive Operations credentials can only be changed by the account holder.',
+        });
+        return;
+      }
+
+      const { hash, salt } = hashPassword(newPassword);
+      target.passwordHash = hash;
+      target.passwordSalt = salt;
+
+      const now = new Date().toISOString();
+      for (const reqItem of db.passwordResetRequests) {
+        if (
+          reqItem.status === 'pending' &&
+          (reqItem.investorId === target.id || reqItem.email === target.email)
+        ) {
+          reqItem.status = 'resolved';
+          reqItem.resolvedByDepartment = 'Nexora Technical Department';
+          reqItem.resolutionNote = resolutionNote || 'Credentials reset by Technical Department.';
+          reqItem.resolvedAt = now;
+        }
+      }
+
+      notifyUser(db, {
+        userId: target.id,
+        title: 'Password Reset · Nexora Technical Department',
+        message:
+          resolutionNote ||
+          'Your account password has been reset by the Nexora Technical Department.',
+        category: 'admin',
+        actionScreen: 'account',
+      });
+      saveDatabase(db);
+
+      sendToUser(target.id, {
+        type: 'investor:updated',
+        investor: sanitizeInvestor(target),
+        notification: 'Technical Department updated your account password.',
+      });
+      broadcastToStaff({ type: 'admin:queue_updated' });
+
+      res.json({ ok: true, user: sanitizeInvestor(target) });
+    }
+  );
+
+  app.post(
+    '/api/admin/password-requests/:id/dismiss',
+    requireAuth,
+    requireMasterAdmin,
+    (req: AuthenticatedRequest, res: Response) => {
+      const db = loadDatabase();
+      const ticket = db.passwordResetRequests.find((r) => r.id === req.params.id);
+      if (!ticket) {
+        res.status(404).json({ error: 'Password request not found.' });
+        return;
+      }
+      ticket.status = 'dismissed';
+      ticket.resolvedByDepartment = 'Nexora Technical Department';
+      ticket.resolvedAt = new Date().toISOString();
+      saveDatabase(db);
+      broadcastToStaff({ type: 'admin:queue_updated' });
+      res.json({ ok: true });
+    }
+  );
+
+  // Delete an investor / staff account
   app.delete(
     '/api/admin/users/:id',
     requireAuth,
@@ -1850,7 +2088,9 @@ async function startServer() {
         return;
       }
       if (target.role === 'master_admin') {
-        res.status(403).json({ error: 'The Master Admin account cannot be deleted.' });
+        res.status(403).json({
+          error: 'The primary Executive Operations account cannot be deleted.',
+        });
         return;
       }
 
@@ -1870,7 +2110,7 @@ async function startServer() {
     }
   );
 
-  // Master Admin ONLY: Promote / Demote roles & Suspend / Restore user accounts
+  // Assign Department Role & Suspend / Restore user accounts
   app.patch(
     '/api/admin/users/:id/role',
     requireAuth,
@@ -1878,6 +2118,8 @@ async function startServer() {
     (req: AuthenticatedRequest, res: Response) => {
       const body = req.body as Record<string, unknown>;
       const role = typeof body.role === 'string' ? (body.role.trim() as UserRole) : undefined;
+      const departmentRaw =
+        typeof body.department === 'string' ? (body.department.trim() as CorporateDepartment) : undefined;
       const accountStatus =
         typeof body.accountStatus === 'string'
           ? (body.accountStatus.trim() as AccountStatus)
@@ -1890,7 +2132,9 @@ async function startServer() {
         return;
       }
       if (target.role === 'master_admin') {
-        res.status(403).json({ error: 'The Master Admin role cannot be modified or demoted.' });
+        res.status(403).json({
+          error: 'Executive Operations director assignment cannot be modified or demoted.',
+        });
         return;
       }
 
@@ -1900,6 +2144,20 @@ async function startServer() {
           return;
         }
         target.role = role;
+        if (role === 'investor') {
+          target.department = undefined;
+        } else {
+          target.department =
+            departmentRaw && VALID_DEPARTMENTS.includes(departmentRaw)
+              ? departmentRaw
+              : departmentForRole(role);
+        }
+      } else if (
+        departmentRaw &&
+        VALID_DEPARTMENTS.includes(departmentRaw) &&
+        target.role !== 'investor'
+      ) {
+        target.department = departmentRaw;
       }
 
       if (accountStatus) {
@@ -1910,10 +2168,11 @@ async function startServer() {
         target.accountStatus = accountStatus;
       }
 
+      const deptLabel = target.department || 'Investor Access';
       notifyUser(db, {
         userId: target.id,
-        title: `Role Updated: ${target.role.toUpperCase()}`,
-        message: `Master Admin set your system role to ${target.role.toUpperCase()} (${target.accountStatus}).`,
+        title: `Department Access Updated · ${deptLabel}`,
+        message: `Nexora Operations updated your account assignment to ${deptLabel} (${target.accountStatus}).`,
         category: 'admin',
         actionScreen: target.role === 'investor' ? 'mine' : 'admin',
       });
@@ -1929,7 +2188,7 @@ async function startServer() {
       sendToUser(target.id, {
         type: 'investor:updated',
         investor: sanitized,
-        notification: `Master Admin updated your role to ${target.role.toUpperCase()} (${target.accountStatus}).`,
+        notification: `Nexora Operations updated your assignment to ${deptLabel} (${target.accountStatus}).`,
       });
       broadcastToStaff({ type: 'admin:queue_updated' });
 

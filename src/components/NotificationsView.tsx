@@ -3,9 +3,9 @@ import {
   ArrowLeft,
   BadgeCheck,
   Bell,
+  Building2,
   CheckCheck,
   Cpu,
-  Crown,
   Gift,
   Wallet,
 } from 'lucide-react';
@@ -26,7 +26,7 @@ const CATEGORY_ICON: Record<NotificationCategory, typeof Bell> = {
   kyc: BadgeCheck,
   referral: Gift,
   rental: Cpu,
-  admin: Crown,
+  admin: Building2,
   system: Bell,
 };
 
@@ -35,7 +35,7 @@ const CATEGORY_LABEL: Record<NotificationCategory, string> = {
   kyc: 'Verification',
   referral: 'Team & Rewards',
   rental: 'Machines',
-  admin: 'Admin Notice',
+  admin: 'Department Notice',
   system: 'System',
 };
 

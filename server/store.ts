@@ -13,6 +13,7 @@ import type {
   KycStatus,
   MachineRental,
   NotificationCategory,
+  PasswordResetRequest,
   RobotMachine,
   SiteConfig,
   UserRole,
@@ -22,7 +23,6 @@ import type {
 export interface StoredInvestor extends InvestorProfile {
   passwordHash: string;
   passwordSalt: string;
-  isDemoAccount?: boolean;
 }
 
 export interface DatabaseState {
@@ -32,14 +32,13 @@ export interface DatabaseState {
   transactions: WalletTransaction[];
   dispatches: FleetDispatch[];
   notifications: AppNotification[];
+  passwordResetRequests: PasswordResetRequest[];
   cryptoCoins: BinanceCoinConfig[];
   siteConfig: SiteConfig;
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'nexora_db.json');
-
-export const DEMO_INVESTOR_EMAIL = 'daniel.meier@nexora.ai';
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   brandName: 'Nexora AI',
@@ -48,7 +47,7 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   heroKicker: '6 European Facilities',
   heroTitle: 'Industrial AI Robotics Leasing',
   heroDescription:
-    'Select active Nexora AI robots operating in Munich, Zurich, Eindhoven, and Rotterdam. Fund leases via Binance-supported coins with Master Admin settlement oversight.',
+    'Select active Nexora AI robots operating in Munich, Zurich, Eindhoven, and Rotterdam. Fund leases via Binance-supported coins with Finance Department settlement oversight.',
   heroImageUrl: '/src/assets/images/hero_robotics_floor_1795701351020.jpg',
   primaryCtaText: 'Browse Robots',
   secondaryCtaText: 'How it works',
@@ -63,11 +62,11 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   howItWorksSteps: [
     {
       title: '01. Register, upload photo & verify ID',
-      body: 'Create your account, add your profile photo, and submit your government ID (plus optional proof of financial ability) for Master Admin approval.',
+      body: 'Create your account, add your profile photo, and submit your government ID (plus optional proof of financial ability) for Compliance Department approval.',
     },
     {
-      title: '02. Deposit crypto with Master Admin review',
-      body: 'Choose any Binance-supported coin, scan or copy the treasury address, and submit your TXID or screenshot. Funds credit once approved.',
+      title: '02. Deposit crypto with Finance Dept review',
+      body: 'Choose any Binance-supported coin, scan or copy the treasury address, and submit your TXID or screenshot. Funds credit once verified by the Finance Department.',
     },
     {
       title: '03. Lease AI robots & invite team members',
@@ -292,248 +291,6 @@ export function createNotificationRecord(
   return notif;
 }
 
-function seedDemoInvestor(db: DatabaseState): boolean {
-  if (db.investors.some((inv) => inv.email === DEMO_INVESTOR_EMAIL)) {
-    return false;
-  }
-
-  const demoId = 'inv_demo_nexora_01';
-  const partnerId = 'inv_demo_team_01';
-  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
-  const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
-  const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-  const sixDaysLater = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString();
-
-  const demoInvestor: StoredInvestor = {
-    id: demoId,
-    role: 'investor',
-    accountStatus: 'active',
-    fullName: 'Daniel Meier',
-    email: DEMO_INVESTOR_EMAIL,
-    phone: '+41 44 580 24 90',
-    companyName: 'Helvetia Robotics Partners',
-    country: 'Switzerland',
-    city: 'Zurich',
-    investorType: 'Individual Investor',
-    kycStatus: 'pending',
-    verification: {
-      documentType: 'Passport',
-      documentNumber: 'CH-P8849201',
-      frontImageUrl: '/src/assets/images/hero_robotics_floor_1795701351020.jpg',
-      backOrSelfieUrl: '/src/assets/images/robot_service_ai_1795701352399.jpg',
-      sourceOfFunds: 'Business Revenue & Capital Reserve',
-      annualCapacity: '$10,000 – $50,000',
-      financialProofNote: 'Commercial bank statement attached for compliance review.',
-      submittedAt: threeHoursAgo,
-    },
-    walletBalance: 4643,
-    heldBalance: 0,
-    totalDeposited: 5700,
-    totalWithdrawn: 0,
-    totalYieldCollected: 0,
-    referralCode: 'NX-DAN720',
-    referralBonusEarned: 143,
-    doubleYieldActiveUntil: sixDaysLater,
-    hasApprovedDeposit: true,
-    createdAt: twoDaysAgo,
-    passwordHash: '',
-    passwordSalt: '',
-    isDemoAccount: true,
-  };
-
-  const teamPartner: StoredInvestor = {
-    id: partnerId,
-    role: 'investor',
-    accountStatus: 'active',
-    fullName: 'Elena Vance',
-    email: 'elena.vance@nexora.ai',
-    phone: '+65 6701 8840',
-    companyName: 'Marina Bay Robotics Capital',
-    country: 'Singapore',
-    city: 'Singapore',
-    investorType: 'Corporate Partner',
-    kycStatus: 'verified',
-    walletBalance: 200,
-    heldBalance: 0,
-    totalDeposited: 2600,
-    totalWithdrawn: 0,
-    totalYieldCollected: 0,
-    referralCode: 'NX-ELE410',
-    referredByUserId: demoId,
-    referredByCode: 'NX-DAN720',
-    referredByName: 'Daniel Meier',
-    referralBonusEarned: 0,
-    hasApprovedDeposit: true,
-    createdAt: oneDayAgo,
-    passwordHash: '',
-    passwordSalt: '',
-    isDemoAccount: true,
-  };
-
-  const sampleRental: MachineRental = {
-    id: 'rnt_demo_atlas_01',
-    investorId: demoId,
-    robotId: 'nx-atlas-m4',
-    robotName: 'Atlas M4 Autonomous Mover',
-    robotModelCode: 'NX-ATLAS-M4',
-    robotImageUrl: '/src/assets/images/robot_logistics_amr_1795701350768.jpg',
-    facilityHub: 'Munich Fulfillment Hub',
-    quantity: 1,
-    unitPrice: 1200,
-    totalCost: 1200,
-    dailyReturnRate: 1.55,
-    dailyPayout: 18.6,
-    yieldMultiplier: 2,
-    accruedYieldCarry: 0,
-    accrualAnchorAt: oneDayAgo,
-    cycleDays: 45,
-    simulatedDaysElapsed: 0,
-    collectedYield: 0,
-    status: 'active',
-    rentedAt: twoDaysAgo,
-    lastClaimedAt: null,
-  };
-
-  const partnerRental: MachineRental = {
-    id: 'rnt_demo_veridian_01',
-    investorId: partnerId,
-    robotId: 'nx-veridian-a7',
-    robotName: 'Veridian A7 Precision Arm',
-    robotModelCode: 'NX-VERIDIAN-A7',
-    robotImageUrl: '/src/assets/images/robot_precision_arm_1795701352118.jpg',
-    facilityHub: 'Eindhoven Cleanroom Bay',
-    quantity: 1,
-    unitPrice: 2600,
-    totalCost: 2600,
-    dailyReturnRate: 1.72,
-    dailyPayout: 44.72,
-    yieldMultiplier: 1,
-    accruedYieldCarry: 0,
-    accrualAnchorAt: oneDayAgo,
-    cycleDays: 50,
-    simulatedDaysElapsed: 0,
-    collectedYield: 0,
-    status: 'active',
-    rentedAt: oneDayAgo,
-    lastClaimedAt: null,
-  };
-
-  const approvedDepositTx: WalletTransaction = {
-    id: 'tx_demo_dep_01',
-    investorId: demoId,
-    investorName: demoInvestor.fullName,
-    investorEmail: demoInvestor.email,
-    type: 'deposit',
-    amount: 5700,
-    status: 'completed',
-    coinSymbol: 'USDT',
-    networkCode: 'BEP20',
-    networkName: 'BNB Smart Chain (BEP20)',
-    walletAddress: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-    txHash: '0x9a4f8b21c6e71234d9e8a7123c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e',
-    reference: 'USDT Deposit · BNB Smart Chain (BEP20)',
-    reviewedBy: 'System Settlement',
-    reviewedAt: twoDaysAgo,
-    createdAt: twoDaysAgo,
-  };
-
-  const rentalTx: WalletTransaction = {
-    id: 'tx_demo_rnt_01',
-    investorId: demoId,
-    investorName: demoInvestor.fullName,
-    investorEmail: demoInvestor.email,
-    type: 'rental',
-    amount: 1200,
-    status: 'completed',
-    reference: 'Rented 1x Atlas M4 Autonomous Mover (45d cycle)',
-    createdAt: oneDayAgo,
-  };
-
-  const referralRewardTx: WalletTransaction = {
-    id: 'tx_demo_ref_01',
-    investorId: demoId,
-    investorName: demoInvestor.fullName,
-    investorEmail: demoInvestor.email,
-    type: 'referral_reward',
-    amount: 143,
-    status: 'completed',
-    reference: 'Invite Reward (5.5%) · Elena Vance $2,600 deposit + 2x Yield Unlocked',
-    createdAt: oneDayAgo,
-  };
-
-  const pendingDepositTx: WalletTransaction = {
-    id: 'tx_demo_pending_01',
-    investorId: demoId,
-    investorName: demoInvestor.fullName,
-    investorEmail: demoInvestor.email,
-    type: 'deposit',
-    amount: 2400,
-    status: 'pending',
-    coinSymbol: 'USDT',
-    networkCode: 'TRC20',
-    networkName: 'TRON (TRC20)',
-    walletAddress: 'TX9K4vP7mR2sE8wQ1zL6nB3cV5xY8dF2aG9',
-    txHash: '4f8d2a7c9e1b3056a2c4f6e8d0b1a3c5e7f902468ace13579bdf0123456789ab',
-    reference: 'USDT Deposit · TRON (TRC20)',
-    createdAt: threeHoursAgo,
-  };
-
-  const partnerDepositTx: WalletTransaction = {
-    id: 'tx_demo_partner_dep_01',
-    investorId: partnerId,
-    investorName: teamPartner.fullName,
-    investorEmail: teamPartner.email,
-    type: 'deposit',
-    amount: 2600,
-    status: 'completed',
-    coinSymbol: 'USDC',
-    networkCode: 'BEP20',
-    networkName: 'BNB Smart Chain (BEP20)',
-    walletAddress: '0x9B3a54D092f1e882A4F81d9C1b771C4e21F3b892',
-    reference: 'USDC Deposit · BNB Smart Chain (BEP20)',
-    reviewedBy: 'System Settlement',
-    reviewedAt: oneDayAgo,
-    createdAt: oneDayAgo,
-  };
-
-  const demoNotifs: AppNotification[] = [
-    {
-      id: 'ntf_demo_01',
-      userId: demoId,
-      title: 'Referral Reward & 2x Daily Yield Unlocked',
-      message:
-        'Elena Vance completed a $2,600 deposit via your code NX-DAN720. $143.00 was credited and your Atlas M4 now earns 2x daily yields.',
-      category: 'referral',
-      read: false,
-      actionScreen: 'referrals',
-      createdAt: oneDayAgo,
-    },
-    {
-      id: 'ntf_demo_02',
-      userId: demoId,
-      title: '$2,400 USDT Deposit Submitted',
-      message:
-        'Your TRON (TRC20) deposit is awaiting Master Admin approval. Funds credit automatically once verified.',
-      category: 'transfer',
-      read: false,
-      actionScreen: 'activity',
-      createdAt: threeHoursAgo,
-    },
-  ];
-
-  db.investors.push(demoInvestor, teamPartner);
-  db.rentals.unshift(sampleRental, partnerRental);
-  db.transactions.unshift(
-    pendingDepositTx,
-    referralRewardTx,
-    rentalTx,
-    approvedDepositTx,
-    partnerDepositTx
-  );
-  db.notifications.unshift(...demoNotifs);
-  return true;
-}
-
 function normalizeInvestorRecord(
   inv: StoredInvestor,
   existingCodes: Set<string>
@@ -590,18 +347,17 @@ function normalizeSiteConfig(cfg?: Partial<SiteConfig>): SiteConfig {
 }
 
 function createSeedDatabase(): DatabaseState {
-  const db: DatabaseState = {
+  return {
     investors: [],
     robots: SEEDED_ROBOTS,
     rentals: [],
     transactions: [],
     dispatches: SEEDED_DISPATCHES,
     notifications: [],
+    passwordResetRequests: [],
     cryptoCoins: structuredClone(BINANCE_COINS),
     siteConfig: structuredClone(DEFAULT_SITE_CONFIG),
   };
-  seedDemoInvestor(db);
-  return db;
 }
 
 export function loadDatabase(): DatabaseState {
@@ -634,15 +390,15 @@ export function loadDatabase(): DatabaseState {
           ? parsed.dispatches
           : SEEDED_DISPATCHES,
       notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
+      passwordResetRequests: Array.isArray(parsed.passwordResetRequests)
+        ? parsed.passwordResetRequests
+        : [],
       cryptoCoins:
         Array.isArray(parsed.cryptoCoins) && parsed.cryptoCoins.length > 0
           ? parsed.cryptoCoins
           : structuredClone(BINANCE_COINS),
       siteConfig: normalizeSiteConfig(parsed.siteConfig),
     };
-    if (seedDemoInvestor(db)) {
-      saveDatabase(db);
-    }
     return db;
   } catch {
     const initial = createSeedDatabase();
@@ -659,8 +415,11 @@ export function saveDatabase(db: DatabaseState): void {
 }
 
 export function hasMasterAdmin(db: DatabaseState): boolean {
-  const envEmail = process.env.MASTER_ADMIN_EMAIL?.trim().toLowerCase();
-  const envPassword = process.env.MASTER_ADMIN_PASSWORD;
+  const envEmail = (process.env.CORPORATE_OPS_EMAIL || process.env.MASTER_ADMIN_EMAIL)
+    ?.trim()
+    .toLowerCase();
+  const envPassword =
+    process.env.CORPORATE_OPS_PASSWORD || process.env.MASTER_ADMIN_PASSWORD;
   if (envEmail && envPassword) {
     return true;
   }
@@ -688,6 +447,7 @@ export function sanitizeInvestor(investor: StoredInvestor): InvestorProfile {
   return {
     id: investor.id,
     role: investor.role,
+    department: investor.department,
     accountStatus: investor.accountStatus,
     fullName: investor.fullName,
     email: investor.email,

@@ -3,8 +3,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Bell,
+  Building2,
   Cpu,
-  Crown,
   Gift,
   Home,
   Newspaper,
@@ -509,7 +509,9 @@ export default function App() {
             <AuthView
               initialMode={authInitialMode}
               initialReferralCode={initialRefCode}
-              masterAdminClaimed={overview?.masterAdminClaimed ?? true}
+              masterAdminClaimed={
+                overview?.corporateInitialized ?? overview?.masterAdminClaimed ?? true
+              }
               brandName={brandName}
               redirectLabel={
                 pendingScreen === 'wallet'
@@ -651,7 +653,9 @@ export default function App() {
             <AuthView
               initialMode="signin"
               initialReferralCode={initialRefCode}
-              masterAdminClaimed={overview?.masterAdminClaimed ?? true}
+              masterAdminClaimed={
+                overview?.corporateInitialized ?? overview?.masterAdminClaimed ?? true
+              }
               brandName={brandName}
               onBack={() => setScreen('home')}
               onAuthenticated={handleAuthenticated}
@@ -740,10 +744,11 @@ export default function App() {
                         : 'text-[#6B7280] dark:text-[#94A3B8]'
                     }`}
                   >
-                    <Crown className="w-4 h-4" />
+                    <Building2 className="w-4 h-4" />
                     {(adminData?.summary.pendingDepositsCount ?? 0) +
                       (adminData?.summary.pendingWithdrawalsCount ?? 0) +
-                      (adminData?.summary.pendingKycCount ?? 0) >
+                      (adminData?.summary.pendingKycCount ?? 0) +
+                      (adminData?.summary.pendingPasswordResetsCount ?? 0) >
                       0 && (
                       <span className="absolute top-0.5 right-1.5 w-2 h-2 rounded-full bg-[#D97706]" />
                     )}
@@ -755,7 +760,7 @@ export default function App() {
                         : 'text-[#6B7280] dark:text-[#94A3B8]'
                     }`}
                   >
-                    Admin
+                    Departments
                   </span>
                 </button>
               ) : (
