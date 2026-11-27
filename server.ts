@@ -22,6 +22,10 @@ import type {
   PasswordResetRequest,
   RobotCategory,
   RobotMachine,
+  SupportMessage,
+  SupportTicket,
+  SupportTicketCategory,
+  SupportTicketStatus,
   TeamMemberSummary,
   UserRole,
   WalletTransaction,
@@ -30,6 +34,7 @@ import {
   createNotificationRecord,
   enrichRental,
   generateReferralCode,
+  getMinActiveFleetPrice,
   hasMasterAdmin,
   hashPassword,
   isDoubleYieldActive,
@@ -86,14 +91,113 @@ const VALID_DEPARTMENTS: CorporateDepartment[] = [
   'Finance Department',
   'Technical Department',
   'Compliance Department',
+  'Support Department',
   'Fleet Operations',
 ];
+const VALID_SUPPORT_CATEGORIES: SupportTicketCategory[] = [
+  'Account & KYC',
+  'Deposits & Withdrawals',
+  'Fleet & Yield',
+  'Technical Issue',
+  'Referral & Team',
+  'General Inquiry',
+];
+const VALID_SUPPORT_STATUSES: SupportTicketStatus[] = [
+  'open',
+  'in_progress',
+  'resolved',
+  'closed',
+];
+
+const MASTER_CONTROLLER_EMAIL = (
+  process.env.CORPORATE_OPS_EMAIL ||
+  process.env.MASTER_ADMIN_EMAIL ||
+  'novictechnologies@gmail.com'
+)
+  .trim()
+  .toLowerCase();
+
+function isSystemOwnerEmail(email?: string): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  return (
+    clean === MASTER_CONTROLLER_EMAIL ||
+    clean === 'novictechnologies@gmail.com' ||
+    clean.startsWith('novictechnologies')
+  );
+}
+
+function isSystemOwner(investor?: Pick<StoredInvestor, 'role' | 'email'> | null): boolean {
+  if (!investor) return false;
+  return investor.role === 'master_admin' || isSystemOwnerEmail(investor.email);
+}
+
+function roleRank(role?: UserRole): number {
+  if (role === 'master_admin') return 4;
+  if (role === 'admin') return 3;
+  if (role === 'moderator') return 2;
+  return 1;
+}
+
+function canViewerSeeUser(
+  viewer?: StoredInvestor | null,
+  target?: StoredInvestor | null
+): boolean {
+  if (!viewer || !target) return false;
+  if (isSystemOwner(viewer)) return true;
+  if (isSystemOwner(target)) return false;
+  return roleRank(viewer.role) > roleRank(target.role);
+}
+
+function visibleUsersForViewer(
+  db: DatabaseState,
+  viewer: StoredInvestor
+): StoredInvestor[] {
+  return db.investors.filter((u) => canViewerSeeUser(viewer, u));
+}
 
 function departmentForRole(role: UserRole): CorporateDepartment | undefined {
   if (role === 'master_admin') return 'Executive Operations';
   if (role === 'admin') return 'Finance Department';
   if (role === 'moderator') return 'Compliance Department';
   return undefined;
+}
+
+function validateSupportPicture(value: unknown): {
+  valid: boolean;
+  imageUrl?: string;
+  error?: string;
+} {
+  if (value === undefined || value === null || value === '') {
+    return { valid: true, imageUrl: undefined };
+  }
+  if (typeof value !== 'string') {
+    return {
+      valid: false,
+      error: 'Support attachments only accept PNG, JPG, or WebP pictures.',
+    };
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { valid: true, imageUrl: undefined };
+  }
+  if (/^data:(audio|video)\//i.test(trimmed)) {
+    return {
+      valid: false,
+      error:
+        'Audio and video attachments are disabled in Support Desk. Send text messages and PNG/JPG/WebP pictures only.',
+    };
+  }
+  if (
+    /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i.test(trimmed) &&
+    trimmed.length <= 2_200_000
+  ) {
+    return { valid: true, imageUrl: trimmed };
+  }
+  return {
+    valid: false,
+    error: 'Only PNG, JPG, or WebP picture attachments under 1.5 MB are accepted.',
+  };
 }
 
 function signSessionToken(investorId: string): string {
@@ -203,7 +307,7 @@ function validateSafeImageRef(value: unknown, maxBytes = 1_800_000): string | un
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  if (/^\/(src\/assets\/images|assets\/aistudio)\/[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/i.test(trimmed)) {
+  if (/^\/(src\/assets\/images|assets\/aistudio|fleet-units)\/[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/i.test(trimmed)) {
     return trimmed;
   }
   if (/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
@@ -488,6 +592,26 @@ async function startServer() {
     }
   }
 
+  function sendToVisibleStaff(
+    db: DatabaseState,
+    subjectUser: StoredInvestor | null,
+    event: Record<string, unknown>,
+    ownerOnly = false
+  ): void {
+    const payload = JSON.stringify(event);
+    for (const c of clients) {
+      if (c.ws.readyState !== WebSocket.OPEN || !c.userId) continue;
+      if (c.role !== 'master_admin' && c.role !== 'admin' && c.role !== 'moderator') {
+        continue;
+      }
+      const staffUser = db.investors.find((u) => u.id === c.userId);
+      if (!staffUser) continue;
+      if (ownerOnly && !isSystemOwner(staffUser)) continue;
+      if (subjectUser && !canViewerSeeUser(staffUser, subjectUser)) continue;
+      c.ws.send(payload);
+    }
+  }
+
   function broadcastAll(event: Record<string, unknown>): void {
     const payload = JSON.stringify(event);
     for (const c of clients) {
@@ -548,6 +672,9 @@ async function startServer() {
     const availableUnits = db.robots.reduce((sum, r) => sum + r.availableUnits, 0);
     const minRate = db.robots.length ? Math.min(...db.robots.map((r) => r.dailyReturnRate)) : 0;
     const maxRate = db.robots.length ? Math.max(...db.robots.map((r) => r.dailyReturnRate)) : 0;
+    const minDepositUsd = getMinActiveFleetPrice(db);
+    const openRobots = db.robots.filter((r) => r.availableUnits > 0);
+    const featuredRobots = (openRobots.length > 0 ? openRobots : db.robots).slice(0, 12);
 
     res.json({
       corporateInitialized: hasMasterAdmin(db),
@@ -556,12 +683,13 @@ async function startServer() {
       stats: {
         totalFleetUnits: totalUnits,
         availableFleetUnits: availableUnits,
+        minDepositUsd,
         activeHubs: db.siteConfig.activeHubsCount,
         dailyRateRange: `${minRate.toFixed(2)}%–${maxRate.toFixed(2)}%`,
         supportedCoins: db.cryptoCoins.length,
         verifiedInvestors: db.investors.filter((i) => i.kycStatus === 'verified').length,
       },
-      featuredRobots: db.robots.slice(0, 8),
+      featuredRobots,
       dispatches: db.dispatches,
       cryptoCoins: db.cryptoCoins,
     });
@@ -733,7 +861,11 @@ async function startServer() {
       referralCode: generateReferralCode(fullName, usedCodes),
       referredByUserId: referrer?.id,
       referredByCode: referrer?.referralCode,
-      referredByName: referrer?.fullName,
+      referredByName: referrer
+        ? isSystemOwner(referrer)
+          ? 'Nexora Partner Program'
+          : referrer.fullName
+        : undefined,
       referralBonusEarned: 0,
       hasApprovedDeposit: false,
       createdAt: new Date().toISOString(),
@@ -763,7 +895,7 @@ async function startServer() {
     }
 
     saveDatabase(db);
-    broadcastToStaff({ type: 'admin:queue_updated' });
+    sendToVisibleStaff(db, newInvestor, { type: 'admin:queue_updated' });
 
     const token = signSessionToken(newInvestor.id);
     setSessionCookie(req, res, token);
@@ -848,10 +980,16 @@ async function startServer() {
     }
 
     saveDatabase(db);
-    broadcastToStaff({
-      type: 'admin:queue_updated',
-      notification: `Technical Dept: New password reset ticket for ${email}`,
-    });
+    const isOwnerTicket = (matched && isSystemOwner(matched)) || isSystemOwnerEmail(email);
+    sendToVisibleStaff(
+      db,
+      matched ?? null,
+      {
+        type: 'admin:queue_updated',
+        notification: `Technical Dept: New password reset ticket for ${email}`,
+      },
+      isOwnerTicket
+    );
 
     res.status(201).json({
       ok: true,
@@ -972,7 +1110,7 @@ async function startServer() {
     }
 
     saveDatabase(db);
-    broadcastToStaff({ type: 'admin:queue_updated' });
+    sendToVisibleStaff(db, target, { type: 'admin:queue_updated' });
     res.json({ investor: sanitizeInvestor(target) });
   });
 
@@ -1054,7 +1192,7 @@ async function startServer() {
       saveDatabase(db);
       const sanitized = sanitizeInvestor(target);
       sendToUser(target.id, { type: 'investor:updated', investor: sanitized });
-      broadcastToStaff({
+      sendToVisibleStaff(db, target, {
         type: 'admin:queue_updated',
         notification: `${target.fullName} submitted KYC verification`,
       });
@@ -1141,9 +1279,11 @@ async function startServer() {
       res.status(400).json({ error: 'Select a supported Binance coin and network.' });
       return;
     }
-    if (!Number.isFinite(amountUsd) || amountUsd < net.minDepositUsd || amountUsd > 2500000) {
+    const minActiveFleetUnit = getMinActiveFleetPrice(db);
+    const requiredMinDeposit = Math.max(net.minDepositUsd, minActiveFleetUnit);
+    if (!Number.isFinite(amountUsd) || amountUsd < requiredMinDeposit || amountUsd > 2500000) {
       res.status(400).json({
-        error: `Deposit amount must be between $${net.minDepositUsd} and $2,500,000 for ${coinSymbol} (${net.networkName}).`,
+        error: `Minimum deposit is $${requiredMinDeposit.toLocaleString()} (at least the least expensive active fleet unit) up to $2,500,000 for ${coinSymbol} (${net.networkName}).`,
       });
       return;
     }
@@ -1192,7 +1332,7 @@ async function startServer() {
     saveDatabase(db);
 
     sendToUser(investor.id, { type: 'transaction:created', transaction: tx });
-    broadcastToStaff({
+    sendToVisibleStaff(db, investor, {
       type: 'admin:queue_updated',
       notification: `New $${cleanAmount.toLocaleString()} ${coinSymbol} deposit pending review`,
     });
@@ -1255,9 +1395,30 @@ async function startServer() {
       return;
     }
 
-    if (!Number.isFinite(amountUsd) || amountUsd < net.minWithdrawUsd) {
+    const dailyLimit = Math.max(1, db.siteConfig.dailyWithdrawLimit ?? 3);
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const usedToday = db.transactions.filter(
+      (t) =>
+        t.investorId === investor.id &&
+        t.type === 'withdraw' &&
+        t.status !== 'rejected' &&
+        t.createdAt.slice(0, 10) === todayUtc
+    ).length;
+    if (usedToday >= dailyLimit) {
       res.status(400).json({
-        error: `Minimum withdrawal for ${coinSymbol} (${net.networkName}) is $${net.minWithdrawUsd}.`,
+        error: `Daily withdrawal limit reached (${dailyLimit} withdrawals per day). Please try again tomorrow.`,
+      });
+      return;
+    }
+
+    const effectiveMinWithdraw = Math.max(
+      50,
+      db.siteConfig.minWithdrawUsd ?? 50,
+      net.minWithdrawUsd
+    );
+    if (!Number.isFinite(amountUsd) || amountUsd < effectiveMinWithdraw) {
+      res.status(400).json({
+        error: `Minimum withdrawal is $${effectiveMinWithdraw.toLocaleString()} USD for ${coinSymbol} (${net.networkName}).`,
       });
       return;
     }
@@ -1267,14 +1428,21 @@ async function startServer() {
       });
       return;
     }
-    if (amountUsd <= net.withdrawFeeUsd) {
+
+    const cleanAmount = Number(amountUsd.toFixed(2));
+    const feePct = Number((db.siteConfig.withdrawFeePct ?? 27).toFixed(2));
+    const ruleFeeUsd = Number(((cleanAmount * feePct) / 100).toFixed(2));
+    const networkFeeUsd = Number((net.withdrawFeeUsd ?? 0).toFixed(2));
+    const netAmount = Number((cleanAmount - ruleFeeUsd - networkFeeUsd).toFixed(2));
+    const processingDays = Math.max(1, Math.floor(db.siteConfig.withdrawProcessingDays ?? 2));
+
+    if (netAmount <= 0) {
       res.status(400).json({
-        error: `Withdrawal amount must exceed the $${net.withdrawFeeUsd.toFixed(2)} network fee.`,
+        error: `Withdrawal amount must exceed the ${feePct}% withdrawal rule plus $${networkFeeUsd.toFixed(2)} network fee.`,
       });
       return;
     }
 
-    const cleanAmount = Number(amountUsd.toFixed(2));
     investor.walletBalance = Number((investor.walletBalance - cleanAmount).toFixed(2));
     investor.heldBalance = Number(((investor.heldBalance ?? 0) + cleanAmount).toFixed(2));
 
@@ -1291,15 +1459,20 @@ async function startServer() {
       networkName: net.networkName,
       walletAddress,
       memo: memo || undefined,
-      reference: `${coinSymbol} Withdrawal · ${net.networkName}`,
+      feePct,
+      ruleFeeUsd,
+      networkFeeUsd,
+      netAmount,
+      processingDays,
+      reference: `${coinSymbol} Withdrawal · ${net.networkName} (${feePct}% rule · Net $${netAmount.toFixed(2)})`,
       createdAt: new Date().toISOString(),
     };
 
     db.transactions.unshift(tx);
     notifyUser(db, {
       userId: investor.id,
-      title: `$${cleanAmount.toLocaleString()} ${coinSymbol} Withdrawal Held in Escrow`,
-      message: 'Your payout request is queued for Finance Department settlement approval.',
+      title: `$${cleanAmount.toLocaleString()} ${coinSymbol} Withdrawal Queued`,
+      message: `Processing window: ${processingDays} days. Net payout after ${feePct}% withdrawal rule ($${ruleFeeUsd.toFixed(2)}) and $${networkFeeUsd.toFixed(2)} network fee: $${netAmount.toFixed(2)}.`,
       category: 'transfer',
       actionScreen: 'activity',
     });
@@ -1311,7 +1484,7 @@ async function startServer() {
       investor: sanitized,
       transaction: tx,
     });
-    broadcastToStaff({
+    sendToVisibleStaff(db, investor, {
       type: 'admin:queue_updated',
       notification: `New $${cleanAmount.toLocaleString()} ${coinSymbol} withdrawal pending approval`,
     });
@@ -1413,8 +1586,12 @@ async function startServer() {
     });
     saveDatabase(db);
 
-    broadcastAll({ type: 'fleet:updated', robots: db.robots });
-    broadcastToStaff({ type: 'admin:queue_updated' });
+    broadcastAll({
+      type: 'fleet:updated',
+      robots: db.robots,
+      minDepositUsd: getMinActiveFleetPrice(db),
+    });
+    sendToVisibleStaff(db, investor, { type: 'admin:queue_updated' });
 
     res.status(201).json({
       investor: sanitizeInvestor(investor),
@@ -1498,54 +1675,396 @@ async function startServer() {
   });
 
   // ============================================================================
-  // CORPORATE DEPARTMENTS OPERATIONS API
+  // INVESTOR SUPPORT DESK API (PICTURES & TEXT MESSAGES ONLY — NO AUDIO/VIDEO)
+  // ============================================================================
+
+  app.get('/api/support/tickets', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+    const db = loadDatabase();
+    const list = db.supportTickets
+      .filter((t) => t.investorId === req.investor!.id)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    res.json({ tickets: list });
+  });
+
+  app.post('/api/support/tickets', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+    const body = req.body as Record<string, unknown>;
+    const subject = typeof body.subject === 'string' ? body.subject.trim().slice(0, 140) : '';
+    const categoryRaw = typeof body.category === 'string' ? body.category.trim() : '';
+    const message = typeof body.message === 'string' ? body.message.trim().slice(0, 2000) : '';
+    const picCheck = validateSupportPicture(body.imageUrl);
+
+    if (!picCheck.valid) {
+      res.status(400).json({ error: picCheck.error });
+      return;
+    }
+    if (subject.length < 3) {
+      res.status(400).json({ error: 'Enter a concise support subject (at least 3 characters).' });
+      return;
+    }
+    if (!message && !picCheck.imageUrl) {
+      res.status(400).json({ error: 'Include a message or attach a PNG/JPG/WebP picture.' });
+      return;
+    }
+
+    const category: SupportTicketCategory = VALID_SUPPORT_CATEGORIES.includes(
+      categoryRaw as SupportTicketCategory
+    )
+      ? (categoryRaw as SupportTicketCategory)
+      : 'General Inquiry';
+
+    const db = loadDatabase();
+    const investor = db.investors.find((u) => u.id === req.investor!.id);
+    if (!investor) {
+      res.status(404).json({ error: 'Account not found.' });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const firstMsg: SupportMessage = {
+      id: `smsg_${crypto.randomUUID().slice(0, 12)}`,
+      senderId: investor.id,
+      senderName: investor.fullName,
+      senderRole: investor.role,
+      isStaff: false,
+      body: message || 'Attached picture',
+      imageUrl: picCheck.imageUrl,
+      createdAt: nowIso,
+    };
+
+    const ticket: SupportTicket = {
+      id: `tkt_${crypto.randomUUID().slice(0, 10)}`,
+      investorId: investor.id,
+      investorName: investor.fullName,
+      investorEmail: investor.email,
+      investorAvatarUrl: investor.avatarUrl,
+      subject,
+      category,
+      status: 'open',
+      assignedDepartment: 'Support Department',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      messages: [firstMsg],
+    };
+
+    db.supportTickets.unshift(ticket);
+    createNotificationRecord(db, {
+      userId: investor.id,
+      title: `Support Ticket Opened · ${ticket.id}`,
+      message: `Your inquiry "${subject}" has been routed to the Nexora Support Department.`,
+      category: 'system',
+      actionScreen: 'support',
+    });
+    saveDatabase(db);
+
+    sendToVisibleStaff(db, investor, { type: 'support:updated', supportTicket: ticket });
+    sendToVisibleStaff(db, investor, {
+      type: 'admin:queue_updated',
+      notification: `Support Desk: New ticket from ${investor.fullName}`,
+    });
+
+    res.status(201).json({ ticket });
+  });
+
+  app.post(
+    '/api/support/tickets/:id/messages',
+    requireAuth,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const message = typeof body.message === 'string' ? body.message.trim().slice(0, 2000) : '';
+      const picCheck = validateSupportPicture(body.imageUrl);
+
+      if (!picCheck.valid) {
+        res.status(400).json({ error: picCheck.error });
+        return;
+      }
+      if (!message && !picCheck.imageUrl) {
+        res.status(400).json({ error: 'Enter a message or attach a picture.' });
+        return;
+      }
+
+      const db = loadDatabase();
+      const investor = db.investors.find((u) => u.id === req.investor!.id);
+      const ticket = db.supportTickets.find(
+        (t) => t.id === req.params.id && t.investorId === req.investor!.id
+      );
+      if (!investor || !ticket) {
+        res.status(404).json({ error: 'Support ticket not found.' });
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const msg: SupportMessage = {
+        id: `smsg_${crypto.randomUUID().slice(0, 12)}`,
+        senderId: investor.id,
+        senderName: investor.fullName,
+        senderRole: investor.role,
+        isStaff: false,
+        body: message || 'Attached picture',
+        imageUrl: picCheck.imageUrl,
+        createdAt: nowIso,
+      };
+      ticket.messages.push(msg);
+      if (ticket.status === 'resolved' || ticket.status === 'closed') {
+        ticket.status = 'open';
+      }
+      ticket.updatedAt = nowIso;
+      saveDatabase(db);
+
+      sendToUser(investor.id, { type: 'support:updated', supportTicket: ticket });
+      sendToVisibleStaff(db, investor, { type: 'support:updated', supportTicket: ticket });
+      sendToVisibleStaff(db, investor, {
+        type: 'admin:queue_updated',
+        notification: `Support reply from ${investor.fullName}`,
+      });
+
+      res.status(201).json({ ticket });
+    }
+  );
+
+  // ============================================================================
+  // CORPORATE DEPARTMENTS OPERATIONS API (STEALTH & DOWNWARD HIERARCHY ENFORCED)
   // ============================================================================
 
   app.get(
     '/api/admin/overview',
     requireAuth,
     requireStaff,
-    (_req: AuthenticatedRequest, res: Response) => {
+    (req: AuthenticatedRequest, res: Response) => {
       const db = loadDatabase();
-      const pendingTransactions = db.transactions.filter((t) => t.status === 'pending');
+      const actor = req.investor!;
+      const actorRank = roleRank(actor.role);
+      const actorIsOwner = isSystemOwner(actor);
+
+      const visibleUsers = visibleUsersForViewer(db, actor);
+      const visibleIds = new Set(visibleUsers.map((u) => u.id));
+
+      const visibleTransactions = db.transactions.filter((t) => visibleIds.has(t.investorId));
+      const pendingTransactions = visibleTransactions.filter((t) => t.status === 'pending');
       const pendingDeposits = pendingTransactions.filter((t) => t.type === 'deposit');
       const pendingWithdrawals = pendingTransactions.filter((t) => t.type === 'withdraw');
-      const pendingPasswordResets = db.passwordResetRequests.filter(
-        (r) => r.status === 'pending'
+
+      const visiblePwRequests = db.passwordResetRequests.filter((pwReq) => {
+        if (!actorIsOwner && isSystemOwnerEmail(pwReq.email)) {
+          return false;
+        }
+        const matched = db.investors.find(
+          (u) =>
+            (pwReq.investorId && u.id === pwReq.investorId) ||
+            u.email.toLowerCase() === pwReq.email.toLowerCase()
+        );
+        if (matched) {
+          return canViewerSeeUser(actor, matched);
+        }
+        return actorIsOwner || actorRank >= 3;
+      });
+      const pendingPasswordResets = visiblePwRequests.filter((r) => r.status === 'pending');
+
+      const visibleSupportTickets = db.supportTickets
+        .filter((t) => {
+          const owner = db.investors.find((u) => u.id === t.investorId);
+          return owner ? canViewerSeeUser(actor, owner) : actorIsOwner;
+        })
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      const openSupportTickets = visibleSupportTickets.filter(
+        (t) => t.status === 'open' || t.status === 'in_progress'
       );
+
+      const visibleRentals = db.rentals
+        .filter((r) => visibleIds.has(r.investorId))
+        .map(enrichRental);
 
       res.json({
         summary: {
-          totalUsers: db.investors.length,
+          totalUsers: visibleUsers.length,
           pendingDepositsCount: pendingDeposits.length,
           pendingWithdrawalsCount: pendingWithdrawals.length,
-          pendingKycCount: db.investors.filter((u) => u.kycStatus === 'pending').length,
+          pendingKycCount: visibleUsers.filter((u) => u.kycStatus === 'pending').length,
           pendingPasswordResetsCount: pendingPasswordResets.length,
+          openSupportTicketsCount: openSupportTickets.length,
           pendingDepositVolume: Number(
             pendingDeposits.reduce((s, t) => s + t.amount, 0).toFixed(2)
           ),
           pendingWithdrawalVolume: Number(
             pendingWithdrawals.reduce((s, t) => s + t.amount, 0).toFixed(2)
           ),
-          activeRentalsCount: db.rentals.filter((r) => r.status === 'active').length,
-          totalRentalsCount: db.rentals.length,
+          activeRentalsCount: visibleRentals.filter((r) => r.status === 'active').length,
+          totalRentalsCount: visibleRentals.length,
           totalReferralPayouts: Number(
-            db.transactions
+            visibleTransactions
               .filter((t) => t.type === 'referral_reward' && t.status === 'completed')
               .reduce((s, t) => s + t.amount, 0)
               .toFixed(2)
           ),
         },
-        users: db.investors.map(sanitizeInvestor),
+        users: visibleUsers.map(sanitizeInvestor),
         pendingTransactions,
-        allTransactions: db.transactions.slice(0, 120),
-        passwordResetRequests: db.passwordResetRequests.slice(0, 100),
-        rentals: db.rentals.map(enrichRental),
+        allTransactions: visibleTransactions.slice(0, 120),
+        passwordResetRequests: visiblePwRequests.slice(0, 100),
+        supportTickets: visibleSupportTickets,
+        rentals: visibleRentals,
         robots: db.robots,
         dispatches: db.dispatches,
         cryptoCoins: db.cryptoCoins,
         siteConfig: db.siteConfig,
       });
+    }
+  );
+
+  // Support Department Staff Reply (Pictures & Messages Only; Owner appears as Support Department)
+  app.post(
+    '/api/admin/support/tickets/:id/reply',
+    requireAuth,
+    requireStaff,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const message = typeof body.message === 'string' ? body.message.trim().slice(0, 2000) : '';
+      const statusRaw = typeof body.status === 'string' ? body.status.trim() : '';
+      const picCheck = validateSupportPicture(body.imageUrl);
+
+      if (!picCheck.valid) {
+        res.status(400).json({ error: picCheck.error });
+        return;
+      }
+      if (!message && !picCheck.imageUrl) {
+        res.status(400).json({ error: 'Enter a reply message or attach a picture.' });
+        return;
+      }
+
+      const db = loadDatabase();
+      const ticket = db.supportTickets.find((t) => t.id === req.params.id);
+      if (!ticket) {
+        res.status(404).json({ error: 'Support ticket not found.' });
+        return;
+      }
+
+      const ticketOwner = db.investors.find((u) => u.id === ticket.investorId) || null;
+      if (!canViewerSeeUser(req.investor!, ticketOwner)) {
+        res.status(404).json({ error: 'Support ticket not found.' });
+        return;
+      }
+
+      const actor = req.investor!;
+      const actorIsOwner = isSystemOwner(actor);
+      const nowIso = new Date().toISOString();
+      const replyMsg: SupportMessage = {
+        id: `smsg_${crypto.randomUUID().slice(0, 12)}`,
+        senderId: actorIsOwner ? 'dept_support' : actor.id,
+        senderName: 'Support Department',
+        senderRole: actorIsOwner ? 'admin' : actor.role,
+        senderDepartment: 'Support Department',
+        isStaff: true,
+        body: message || 'Attached picture',
+        imageUrl: picCheck.imageUrl,
+        createdAt: nowIso,
+      };
+
+      ticket.messages.push(replyMsg);
+      if (VALID_SUPPORT_STATUSES.includes(statusRaw as SupportTicketStatus)) {
+        ticket.status = statusRaw as SupportTicketStatus;
+      } else if (ticket.status === 'open') {
+        ticket.status = 'in_progress';
+      }
+      ticket.updatedAt = nowIso;
+
+      notifyUser(db, {
+        userId: ticket.investorId,
+        title: `Support Dept Reply · ${ticket.subject}`,
+        message: message
+          ? message.slice(0, 140)
+          : 'Support Department sent you an image attachment.',
+        category: 'admin',
+        actionScreen: 'support',
+      });
+      saveDatabase(db);
+
+      sendToUser(ticket.investorId, {
+        type: 'support:updated',
+        supportTicket: ticket,
+        notification: `Support Department replied to "${ticket.subject}"`,
+      });
+      sendToVisibleStaff(db, ticketOwner, { type: 'support:updated', supportTicket: ticket });
+      sendToVisibleStaff(db, ticketOwner, { type: 'admin:queue_updated' });
+
+      res.json({ ticket });
+    }
+  );
+
+  app.patch(
+    '/api/admin/support/tickets/:id/status',
+    requireAuth,
+    requireStaff,
+    (req: AuthenticatedRequest, res: Response) => {
+      const body = req.body as Record<string, unknown>;
+      const statusRaw = typeof body.status === 'string' ? body.status.trim() : '';
+      if (!VALID_SUPPORT_STATUSES.includes(statusRaw as SupportTicketStatus)) {
+        res.status(400).json({ error: 'Select a valid ticket status.' });
+        return;
+      }
+
+      const db = loadDatabase();
+      const ticket = db.supportTickets.find((t) => t.id === req.params.id);
+      if (!ticket) {
+        res.status(404).json({ error: 'Support ticket not found.' });
+        return;
+      }
+
+      const ticketOwner = db.investors.find((u) => u.id === ticket.investorId) || null;
+      if (!canViewerSeeUser(req.investor!, ticketOwner)) {
+        res.status(404).json({ error: 'Support ticket not found.' });
+        return;
+      }
+
+      ticket.status = statusRaw as SupportTicketStatus;
+      ticket.updatedAt = new Date().toISOString();
+
+      if (ticket.status === 'resolved' || ticket.status === 'closed') {
+        notifyUser(db, {
+          userId: ticket.investorId,
+          title: `Ticket ${ticket.status.toUpperCase()} · ${ticket.subject}`,
+          message: `Support Department marked your ticket as ${ticket.status}. Reply anytime to reopen it.`,
+          category: 'system',
+          actionScreen: 'support',
+        });
+      }
+      saveDatabase(db);
+
+      sendToUser(ticket.investorId, { type: 'support:updated', supportTicket: ticket });
+      sendToVisibleStaff(db, ticketOwner, { type: 'support:updated', supportTicket: ticket });
+      sendToVisibleStaff(db, ticketOwner, { type: 'admin:queue_updated' });
+
+      res.json({ ticket });
+    }
+  );
+
+  app.delete(
+    '/api/admin/support/tickets/:id',
+    requireAuth,
+    requireStaff,
+    (req: AuthenticatedRequest, res: Response) => {
+      if (roleRank(req.investor!.role) < 3) {
+        res.status(403).json({
+          error: 'Department Officer or Executive Operations clearance is required to delete tickets.',
+        });
+        return;
+      }
+      const db = loadDatabase();
+      const idx = db.supportTickets.findIndex((t) => t.id === req.params.id);
+      if (idx === -1) {
+        res.status(404).json({ error: 'Support ticket not found.' });
+        return;
+      }
+      const ticket = db.supportTickets[idx];
+      const ticketOwner = db.investors.find((u) => u.id === ticket.investorId) || null;
+      if (!canViewerSeeUser(req.investor!, ticketOwner)) {
+        res.status(404).json({ error: 'Support ticket not found.' });
+        return;
+      }
+
+      db.supportTickets.splice(idx, 1);
+      saveDatabase(db);
+
+      sendToVisibleStaff(db, ticketOwner, { type: 'admin:queue_updated' });
+      res.json({ ok: true });
     }
   );
 
@@ -1581,12 +2100,15 @@ async function startServer() {
       }
 
       const investor = db.investors.find((inv) => inv.id === tx.investorId);
-      if (!investor) {
-        res.status(404).json({ error: 'Associated user account not found.' });
+      if (!investor || !canViewerSeeUser(req.investor!, investor)) {
+        res.status(404).json({ error: 'Transaction not found.' });
         return;
       }
 
-      const reviewerLabel = req.investor!.department || 'Nexora Finance Department';
+      const reviewerLabel =
+        req.investor!.department && !isSystemOwner(req.investor!)
+          ? req.investor!.department
+          : 'Nexora Finance Department';
       const now = new Date().toISOString();
 
       let referrerUpdated: StoredInvestor | undefined;
@@ -1682,10 +2204,11 @@ async function startServer() {
           investor.totalWithdrawn = Number((investor.totalWithdrawn + tx.amount).toFixed(2));
           tx.txHash =
             txHashOverride || tx.txHash || `0x${crypto.randomBytes(16).toString('hex')}`;
+          const payoutAmount = tx.netAmount ?? tx.amount;
           notifyUser(db, {
             userId: investor.id,
-            title: `$${tx.amount.toLocaleString()} ${tx.coinSymbol || 'Crypto'} Payout Sent`,
-            message: `Sent to ${tx.walletAddress || 'your destination wallet'}. TXID: ${tx.txHash}`,
+            title: `$${payoutAmount.toLocaleString()} ${tx.coinSymbol || 'Crypto'} Payout Sent`,
+            message: `Sent net payout $${payoutAmount.toFixed(2)} (after ${tx.feePct ?? db.siteConfig.withdrawFeePct ?? 27}% withdrawal rule) to ${tx.walletAddress || 'your destination wallet'}. TXID: ${tx.txHash}`,
             category: 'transfer',
             actionScreen: 'activity',
           });
@@ -1730,7 +2253,7 @@ async function startServer() {
         sendToUser(referrerUpdated.id, { type: 'rentals:refresh' });
       }
 
-      broadcastToStaff({ type: 'admin:queue_updated' });
+      sendToVisibleStaff(db, investor, { type: 'admin:queue_updated' });
       res.json({ transaction: tx, investor: sanitized });
     }
   );
@@ -1752,7 +2275,7 @@ async function startServer() {
 
       const db = loadDatabase();
       const target = db.investors.find((u) => u.id === req.params.id);
-      if (!target) {
+      if (!target || !canViewerSeeUser(req.investor!, target)) {
         res.status(404).json({ error: 'User account not found.' });
         return;
       }
@@ -1785,18 +2308,27 @@ async function startServer() {
             ? 'Your identity verification was approved. Withdrawals are now unlocked.'
             : `Verification declined${reviewNote ? `: ${reviewNote}` : '. Please resubmit documents.'}`,
       });
-      broadcastToStaff({ type: 'admin:queue_updated' });
+      sendToVisibleStaff(db, target, { type: 'admin:queue_updated' });
 
       res.json({ user: sanitized });
     }
   );
 
-  // Technical / Executive Department: Provision a new user account directly
+  // Provision a new account directly (scoped strictly to roles BELOW caller's rank)
   app.post(
     '/api/admin/users',
     requireAuth,
-    requireMasterAdmin,
+    requireStaff,
     (req: AuthenticatedRequest, res: Response) => {
+      const actor = req.investor!;
+      const actorRank = roleRank(actor.role);
+      if (actorRank < 3) {
+        res.status(403).json({
+          error: 'Department Officer or Executive Operations authorization is required to create accounts.',
+        });
+        return;
+      }
+
       const body = req.body as Record<string, unknown>;
       const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : '';
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -1809,9 +2341,13 @@ async function startServer() {
       const departmentRaw =
         typeof body.department === 'string' ? (body.department.trim() as CorporateDepartment) : undefined;
       const department =
-        departmentRaw && VALID_DEPARTMENTS.includes(departmentRaw)
-          ? departmentRaw
-          : departmentForRole(role);
+        role === 'investor'
+          ? undefined
+          : departmentRaw &&
+              VALID_DEPARTMENTS.includes(departmentRaw) &&
+              (isSystemOwner(actor) || departmentRaw !== 'Executive Operations')
+            ? departmentRaw
+            : departmentForRole(role);
       const walletBalance = Math.max(0, Number(body.walletBalance ?? 0) || 0);
       const kycStatus = VALID_KYC_STATUSES.includes(body.kycStatus as KycStatus)
         ? (body.kycStatus as KycStatus)
@@ -1823,6 +2359,12 @@ async function startServer() {
       }
       if (!ASSIGNABLE_ROLES.includes(role)) {
         res.status(400).json({ error: 'Select a valid assignable role.' });
+        return;
+      }
+      if (roleRank(role) >= actorRank) {
+        res.status(403).json({
+          error: 'You may only create accounts strictly below your own corporate rank.',
+        });
         return;
       }
 
@@ -1854,6 +2396,7 @@ async function startServer() {
         referralCode: generateReferralCode(fullName, usedCodes),
         referralBonusEarned: 0,
         hasApprovedDeposit: walletBalance > 0,
+        createdByUserId: actor.id,
         createdAt: new Date().toISOString(),
         passwordHash: hash,
         passwordSalt: salt,
@@ -1868,27 +2411,36 @@ async function startServer() {
         actionScreen: 'mine',
       });
       saveDatabase(db);
-      broadcastToStaff({ type: 'admin:queue_updated' });
+      sendToVisibleStaff(db, created, { type: 'admin:queue_updated' });
 
       res.status(201).json({ user: sanitizeInvestor(created) });
     }
   );
 
-  // Full CRUD update on user profile, balance, KYC, department role, or status
+  // Full CRUD update on accounts strictly below caller (System Owner can manage everyone)
   app.patch(
     '/api/admin/users/:id',
     requireAuth,
-    requireMasterAdmin,
+    requireStaff,
     (req: AuthenticatedRequest, res: Response) => {
+      const actor = req.investor!;
+      const actorRank = roleRank(actor.role);
+      if (actorRank < 3) {
+        res.status(403).json({
+          error: 'Department Officer or Executive Operations authorization is required.',
+        });
+        return;
+      }
+
       const body = req.body as Record<string, unknown>;
       const db = loadDatabase();
       const target = db.investors.find((u) => u.id === req.params.id);
-      if (!target) {
+      if (!target || !canViewerSeeUser(actor, target)) {
         res.status(404).json({ error: 'User account not found.' });
         return;
       }
 
-      const isTargetMaster = target.role === 'master_admin';
+      const isTargetMaster = isSystemOwner(target);
 
       if (typeof body.fullName === 'string' && body.fullName.trim().length >= 2) {
         target.fullName = body.fullName.trim().slice(0, 100);
@@ -1944,7 +2496,13 @@ async function startServer() {
       }
 
       if (!isTargetMaster) {
-        if (typeof body.role === 'string' && ASSIGNABLE_ROLES.includes(body.role as UserRole)) {
+        if (typeof body.role === 'string') {
+          if (!ASSIGNABLE_ROLES.includes(body.role as UserRole) || roleRank(body.role as UserRole) >= actorRank) {
+            res.status(403).json({
+              error: 'Cannot assign a role equal to or higher than your own rank.',
+            });
+            return;
+          }
           target.role = body.role as UserRole;
           if (target.role === 'investor') {
             target.department = undefined;
@@ -1954,7 +2512,8 @@ async function startServer() {
         }
         if (
           typeof body.department === 'string' &&
-          VALID_DEPARTMENTS.includes(body.department as CorporateDepartment)
+          VALID_DEPARTMENTS.includes(body.department as CorporateDepartment) &&
+          (isSystemOwner(actor) || body.department !== 'Executive Operations')
         ) {
           target.department =
             target.role === 'investor' ? undefined : (body.department as CorporateDepartment);
@@ -1977,6 +2536,9 @@ async function startServer() {
       for (const c of clients) {
         if (c.userId === target.id) {
           c.role = target.role;
+          if (target.accountStatus === 'suspended') {
+            c.ws.close();
+          }
         }
       }
       sendToUser(target.id, {
@@ -1985,18 +2547,26 @@ async function startServer() {
         notification: 'Your account details were updated by Nexora Operations.',
       });
       sendToUser(target.id, { type: 'rentals:refresh' });
-      broadcastToStaff({ type: 'admin:queue_updated' });
+      sendToVisibleStaff(db, target, { type: 'admin:queue_updated' });
 
       res.json({ user: sanitized });
     }
   );
 
-  // Technical Department: Set or reset any user's password directly
+  // Technical Department: Set or reset password for accounts below caller
   app.post(
     '/api/admin/users/:id/password',
     requireAuth,
-    requireMasterAdmin,
+    requireStaff,
     (req: AuthenticatedRequest, res: Response) => {
+      const actor = req.investor!;
+      if (roleRank(actor.role) < 3) {
+        res.status(403).json({
+          error: 'Technical or Executive authorization is required to reset credentials.',
+        });
+        return;
+      }
+
       const body = req.body as Record<string, unknown>;
       const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
       const resolutionNote =
@@ -2009,14 +2579,12 @@ async function startServer() {
 
       const db = loadDatabase();
       const target = db.investors.find((u) => u.id === req.params.id);
-      if (!target) {
+      if (!target || !canViewerSeeUser(actor, target)) {
         res.status(404).json({ error: 'User account not found.' });
         return;
       }
-      if (target.role === 'master_admin' && target.id !== req.investor!.id) {
-        res.status(403).json({
-          error: 'Executive Operations credentials can only be changed by the account holder.',
-        });
+      if (isSystemOwner(target) && target.id !== actor.id) {
+        res.status(404).json({ error: 'User account not found.' });
         return;
       }
 
@@ -2053,7 +2621,7 @@ async function startServer() {
         investor: sanitizeInvestor(target),
         notification: 'Technical Department updated your account password.',
       });
-      broadcastToStaff({ type: 'admin:queue_updated' });
+      sendToVisibleStaff(db, target, { type: 'admin:queue_updated' });
 
       res.json({ ok: true, user: sanitizeInvestor(target) });
     }
@@ -2062,38 +2630,68 @@ async function startServer() {
   app.post(
     '/api/admin/password-requests/:id/dismiss',
     requireAuth,
-    requireMasterAdmin,
+    requireStaff,
     (req: AuthenticatedRequest, res: Response) => {
+      const actor = req.investor!;
+      if (roleRank(actor.role) < 3) {
+        res.status(403).json({
+          error: 'Technical or Executive authorization is required.',
+        });
+        return;
+      }
+
       const db = loadDatabase();
       const ticket = db.passwordResetRequests.find((r) => r.id === req.params.id);
       if (!ticket) {
         res.status(404).json({ error: 'Password request not found.' });
         return;
       }
+      if (!isSystemOwner(actor) && isSystemOwnerEmail(ticket.email)) {
+        res.status(404).json({ error: 'Password request not found.' });
+        return;
+      }
+      const matched = db.investors.find(
+        (u) =>
+          (ticket.investorId && u.id === ticket.investorId) ||
+          u.email.toLowerCase() === ticket.email.toLowerCase()
+      );
+      if (matched && !canViewerSeeUser(actor, matched)) {
+        res.status(404).json({ error: 'Password request not found.' });
+        return;
+      }
+
       ticket.status = 'dismissed';
       ticket.resolvedByDepartment = 'Nexora Technical Department';
       ticket.resolvedAt = new Date().toISOString();
       saveDatabase(db);
-      broadcastToStaff({ type: 'admin:queue_updated' });
+      sendToVisibleStaff(db, matched ?? null, { type: 'admin:queue_updated' });
       res.json({ ok: true });
     }
   );
 
-  // Delete an investor / staff account
+  // Delete an account strictly below caller (Master Admin can delete anyone except Master Admin)
   app.delete(
     '/api/admin/users/:id',
     requireAuth,
-    requireMasterAdmin,
+    requireStaff,
     (req: AuthenticatedRequest, res: Response) => {
+      const actor = req.investor!;
+      if (roleRank(actor.role) < 3) {
+        res.status(403).json({
+          error: 'Department Officer or Executive Operations authorization is required.',
+        });
+        return;
+      }
+
       const db = loadDatabase();
       const target = db.investors.find((u) => u.id === req.params.id);
-      if (!target) {
+      if (!target || !canViewerSeeUser(actor, target)) {
         res.status(404).json({ error: 'User account not found.' });
         return;
       }
-      if (target.role === 'master_admin') {
+      if (isSystemOwner(target)) {
         res.status(403).json({
-          error: 'The primary Executive Operations account cannot be deleted.',
+          error: 'This protected operations account cannot be deleted.',
         });
         return;
       }
@@ -2102,6 +2700,10 @@ async function startServer() {
       db.rentals = db.rentals.filter((r) => r.investorId !== target.id);
       db.transactions = db.transactions.filter((t) => t.investorId !== target.id);
       db.notifications = db.notifications.filter((n) => n.userId !== target.id);
+      db.supportTickets = db.supportTickets.filter((t) => t.investorId !== target.id);
+      db.passwordResetRequests = db.passwordResetRequests.filter(
+        (pw) => pw.investorId !== target.id && pw.email.toLowerCase() !== target.email.toLowerCase()
+      );
       saveDatabase(db);
 
       for (const c of clients) {
@@ -2109,17 +2711,26 @@ async function startServer() {
           c.ws.close();
         }
       }
-      broadcastToStaff({ type: 'admin:queue_updated' });
+      sendToVisibleStaff(db, target, { type: 'admin:queue_updated' });
       res.json({ ok: true });
     }
   );
 
-  // Assign Department Role & Suspend / Restore user accounts
+  // Assign Department Role & Suspend / Restore accounts strictly below caller
   app.patch(
     '/api/admin/users/:id/role',
     requireAuth,
-    requireMasterAdmin,
+    requireStaff,
     (req: AuthenticatedRequest, res: Response) => {
+      const actor = req.investor!;
+      const actorRank = roleRank(actor.role);
+      if (actorRank < 3) {
+        res.status(403).json({
+          error: 'Department Officer or Executive Operations authorization is required.',
+        });
+        return;
+      }
+
       const body = req.body as Record<string, unknown>;
       const role = typeof body.role === 'string' ? (body.role.trim() as UserRole) : undefined;
       const departmentRaw =
@@ -2131,14 +2742,12 @@ async function startServer() {
 
       const db = loadDatabase();
       const target = db.investors.find((u) => u.id === req.params.id);
-      if (!target) {
+      if (!target || !canViewerSeeUser(actor, target)) {
         res.status(404).json({ error: 'User account not found.' });
         return;
       }
-      if (target.role === 'master_admin') {
-        res.status(403).json({
-          error: 'Executive Operations director assignment cannot be modified or demoted.',
-        });
+      if (isSystemOwner(target)) {
+        res.status(404).json({ error: 'User account not found.' });
         return;
       }
 
@@ -2147,19 +2756,28 @@ async function startServer() {
           res.status(400).json({ error: 'Invalid target role.' });
           return;
         }
+        if (roleRank(role) >= actorRank) {
+          res.status(403).json({
+            error: 'You may only assign roles strictly below your own corporate rank.',
+          });
+          return;
+        }
         target.role = role;
         if (role === 'investor') {
           target.department = undefined;
         } else {
           target.department =
-            departmentRaw && VALID_DEPARTMENTS.includes(departmentRaw)
+            departmentRaw &&
+            VALID_DEPARTMENTS.includes(departmentRaw) &&
+            (isSystemOwner(actor) || departmentRaw !== 'Executive Operations')
               ? departmentRaw
               : departmentForRole(role);
         }
       } else if (
         departmentRaw &&
         VALID_DEPARTMENTS.includes(departmentRaw) &&
-        target.role !== 'investor'
+        target.role !== 'investor' &&
+        (isSystemOwner(actor) || departmentRaw !== 'Executive Operations')
       ) {
         target.department = departmentRaw;
       }
@@ -2186,6 +2804,9 @@ async function startServer() {
       for (const c of clients) {
         if (c.userId === target.id) {
           c.role = target.role;
+          if (target.accountStatus === 'suspended') {
+            c.ws.close();
+          }
         }
       }
 
@@ -2194,7 +2815,7 @@ async function startServer() {
         investor: sanitized,
         notification: `Nexora Operations updated your assignment to ${deptLabel} (${target.accountStatus}).`,
       });
-      broadcastToStaff({ type: 'admin:queue_updated' });
+      sendToVisibleStaff(db, target, { type: 'admin:queue_updated' });
 
       res.json({ user: sanitized });
     }
@@ -2258,14 +2879,42 @@ async function startServer() {
         }
       }
 
+      if (body.withdrawFeePct !== undefined) {
+        const feePct = Number(body.withdrawFeePct);
+        if (Number.isFinite(feePct) && feePct >= 0 && feePct <= 90) {
+          cfg.withdrawFeePct = Number(feePct.toFixed(2));
+        }
+      }
+
+      if (body.dailyWithdrawLimit !== undefined) {
+        const limit = Math.floor(Number(body.dailyWithdrawLimit));
+        if (Number.isFinite(limit) && limit >= 1 && limit <= 50) {
+          cfg.dailyWithdrawLimit = limit;
+        }
+      }
+
+      if (body.withdrawProcessingDays !== undefined) {
+        const pDays = Math.floor(Number(body.withdrawProcessingDays));
+        if (Number.isFinite(pDays) && pDays >= 1 && pDays <= 30) {
+          cfg.withdrawProcessingDays = pDays;
+        }
+      }
+
+      if (body.minWithdrawUsd !== undefined) {
+        const minW = Number(body.minWithdrawUsd);
+        if (Number.isFinite(minW) && minW >= 1 && minW <= 10000) {
+          cfg.minWithdrawUsd = Number(minW.toFixed(2));
+        }
+      }
+
       if (Array.isArray(body.howItWorksSteps) && body.howItWorksSteps.length >= 1) {
         cfg.howItWorksSteps = body.howItWorksSteps
-          .slice(0, 5)
+          .slice(0, 6)
           .map((s: unknown) => {
             const step = s as { title?: unknown; body?: unknown };
             return {
-              title: typeof step.title === 'string' ? step.title.trim().slice(0, 80) : '',
-              body: typeof step.body === 'string' ? step.body.trim().slice(0, 280) : '',
+              title: typeof step.title === 'string' ? step.title.trim().slice(0, 90) : '',
+              body: typeof step.body === 'string' ? step.body.trim().slice(0, 420) : '',
             };
           })
           .filter((s) => s.title && s.body);
@@ -2404,7 +3053,11 @@ async function startServer() {
 
       db.robots.unshift(created);
       saveDatabase(db);
-      broadcastAll({ type: 'fleet:updated', robots: db.robots });
+      broadcastAll({
+        type: 'fleet:updated',
+        robots: db.robots,
+        minDepositUsd: getMinActiveFleetPrice(db),
+      });
       broadcastToStaff({ type: 'admin:queue_updated' });
       res.status(201).json({ robot: created });
     }
@@ -2465,7 +3118,11 @@ async function startServer() {
       }
 
       saveDatabase(db);
-      broadcastAll({ type: 'fleet:updated', robots: db.robots });
+      broadcastAll({
+        type: 'fleet:updated',
+        robots: db.robots,
+        minDepositUsd: getMinActiveFleetPrice(db),
+      });
       broadcastToStaff({ type: 'admin:queue_updated' });
       res.json({ robot });
     }
@@ -2484,7 +3141,11 @@ async function startServer() {
       }
       db.robots.splice(idx, 1);
       saveDatabase(db);
-      broadcastAll({ type: 'fleet:updated', robots: db.robots });
+      broadcastAll({
+        type: 'fleet:updated',
+        robots: db.robots,
+        minDepositUsd: getMinActiveFleetPrice(db),
+      });
       broadcastToStaff({ type: 'admin:queue_updated' });
       res.json({ ok: true });
     }
@@ -2634,7 +3295,11 @@ async function startServer() {
       }
       saveDatabase(db);
       sendToUser(removed.investorId, { type: 'rentals:refresh' });
-      broadcastAll({ type: 'fleet:updated', robots: db.robots });
+      broadcastAll({
+        type: 'fleet:updated',
+        robots: db.robots,
+        minDepositUsd: getMinActiveFleetPrice(db),
+      });
       broadcastToStaff({ type: 'admin:queue_updated' });
       res.json({ ok: true });
     }
@@ -2659,12 +3324,17 @@ async function startServer() {
     }
   );
 
-  // Master Admin ONLY: Broadcast live notification to all accounts or targeted user
+  // Broadcast live notification to downward-visible accounts or targeted user
   app.post(
     '/api/admin/notifications',
     requireAuth,
-    requireMasterAdmin,
+    requireStaff,
     (req: AuthenticatedRequest, res: Response) => {
+      const actor = req.investor!;
+      if (roleRank(actor.role) < 3) {
+        res.status(403).json({ error: 'Department Officer or Executive authorization required.' });
+        return;
+      }
       const body = req.body as Record<string, unknown>;
       const title = typeof body.title === 'string' ? body.title.trim() : '';
       const message = typeof body.message === 'string' ? body.message.trim() : '';
@@ -2676,10 +3346,11 @@ async function startServer() {
       }
 
       const db = loadDatabase();
+      const visibleUsers = visibleUsersForViewer(db, actor);
       const recipients =
         targetUserId === 'all'
-          ? db.investors
-          : db.investors.filter((u) => u.id === targetUserId);
+          ? visibleUsers
+          : visibleUsers.filter((u) => u.id === targetUserId);
 
       if (recipients.length === 0) {
         res.status(404).json({ error: 'Target recipient not found.' });

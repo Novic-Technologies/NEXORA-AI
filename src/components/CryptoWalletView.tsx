@@ -31,12 +31,16 @@ import type {
   BinanceCoinSymbol,
   BinanceNetworkCode,
   InvestorProfile,
+  SiteConfig,
   WalletTransaction,
 } from '../types.ts';
 
 interface CryptoWalletViewProps {
   investor: InvestorProfile;
   cryptoCoins?: BinanceCoinConfig[];
+  siteConfig?: SiteConfig;
+  minFleetDepositUsd?: number;
+  transactions?: WalletTransaction[];
   initialTab?: 'deposit' | 'withdraw';
   suggestedDepositUsd?: number;
   onBack?: () => void;
@@ -47,6 +51,9 @@ interface CryptoWalletViewProps {
 export function CryptoWalletView({
   investor,
   cryptoCoins,
+  siteConfig,
+  minFleetDepositUsd,
+  transactions = [],
   initialTab = 'deposit',
   suggestedDepositUsd,
   onBack,
@@ -54,6 +61,7 @@ export function CryptoWalletView({
   onOpenVerification,
 }: CryptoWalletViewProps) {
   const coins = cryptoCoins && cryptoCoins.length > 0 ? cryptoCoins : BINANCE_COINS;
+  const baseMinDeposit = Math.max(50, Math.ceil(minFleetDepositUsd ?? 650));
 
   const [tab, setTab] = useState<'deposit' | 'withdraw'>(initialTab);
   const [coinSearch, setCoinSearch] = useState('');
@@ -61,8 +69,8 @@ export function CryptoWalletView({
   const [networkCode, setNetworkCode] = useState<BinanceNetworkCode>('TRC20');
   const [depositAmount, setDepositAmount] = useState<string>(
     suggestedDepositUsd && suggestedDepositUsd > 0
-      ? String(Math.max(50, Math.ceil(suggestedDepositUsd)))
-      : '1500'
+      ? String(Math.max(baseMinDeposit, Math.ceil(suggestedDepositUsd)))
+      : String(Math.max(baseMinDeposit, 1500))
   );
   const [txHash, setTxHash] = useState('');
   const [receiptImageUrl, setReceiptImageUrl] = useState('');
@@ -142,6 +150,38 @@ export function CryptoWalletView({
     }
   };
 
+  const minDepositFloor = Math.max(
+    selectedNetwork.minDepositUsd,
+    minFleetDepositUsd ?? 650
+  );
+  const effectiveMinWithdraw = Math.max(
+    50,
+    siteConfig?.minWithdrawUsd ?? 50,
+    selectedNetwork.minWithdrawUsd
+  );
+  const withdrawFeePct = siteConfig?.withdrawFeePct ?? 27;
+  const dailyLimit = Math.max(1, siteConfig?.dailyWithdrawLimit ?? 3);
+  const processingDays = Math.max(1, siteConfig?.withdrawProcessingDays ?? 2);
+
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  const usedToday = useMemo(
+    () =>
+      transactions.filter(
+        (t) =>
+          t.type === 'withdraw' &&
+          t.status !== 'rejected' &&
+          t.createdAt.slice(0, 10) === todayUtc
+      ).length,
+    [transactions, todayUtc]
+  );
+
+  const depositPresets = useMemo(() => {
+    const raw = [minDepositFloor, 1500, 2600, 4800].map((v) =>
+      Math.max(minDepositFloor, Math.ceil(v))
+    );
+    return Array.from(new Set(raw)).sort((a, b) => a - b);
+  }, [minDepositFloor]);
+
   const handleDepositSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (submitting) return;
@@ -149,9 +189,9 @@ export function CryptoWalletView({
     setSuccessMsg(null);
 
     const amountNum = Number(depositAmount);
-    if (!Number.isFinite(amountNum) || amountNum < selectedNetwork.minDepositUsd) {
+    if (!Number.isFinite(amountNum) || amountNum < minDepositFloor) {
       setError(
-        `Minimum deposit for ${selectedCoin.symbol} (${selectedNetwork.networkName}) is ${formatUsd(selectedNetwork.minDepositUsd)}.`
+        `Minimum deposit for ${selectedCoin.symbol} (${selectedNetwork.networkName}) is ${formatUsd(minDepositFloor)} (at least the least expensive active fleet unit).`
       );
       return;
     }
@@ -198,9 +238,16 @@ export function CryptoWalletView({
       return;
     }
 
-    if (investor.walletBalance < selectedNetwork.minWithdrawUsd) {
+    if (usedToday >= dailyLimit) {
       setError(
-        `Available balance (${formatUsd(investor.walletBalance)}) is below the ${formatUsd(selectedNetwork.minWithdrawUsd)} minimum withdrawal for ${selectedCoin.symbol} (${selectedNetwork.networkCode}).`
+        `Daily withdrawal limit reached (${dailyLimit} withdrawals per day). Please try again tomorrow.`
+      );
+      return;
+    }
+
+    if (investor.walletBalance < effectiveMinWithdraw) {
+      setError(
+        `Available balance (${formatUsd(investor.walletBalance)}) is below the ${formatUsd(effectiveMinWithdraw)} minimum withdrawal.`
       );
       return;
     }
@@ -220,9 +267,9 @@ export function CryptoWalletView({
     }
 
     const amountNum = Number(withdrawAmount);
-    if (!Number.isFinite(amountNum) || amountNum < selectedNetwork.minWithdrawUsd) {
+    if (!Number.isFinite(amountNum) || amountNum < effectiveMinWithdraw) {
       setError(
-        `Minimum withdrawal for ${selectedCoin.symbol} (${selectedNetwork.networkName}) is ${formatUsd(selectedNetwork.minWithdrawUsd)}.`
+        `Minimum withdrawal across all wallets is ${formatUsd(effectiveMinWithdraw)}.`
       );
       return;
     }
@@ -230,9 +277,12 @@ export function CryptoWalletView({
       setError('Withdrawal amount exceeds your available wallet balance.');
       return;
     }
-    if (amountNum <= selectedNetwork.withdrawFeeUsd) {
+
+    const estRuleFee = Number(((amountNum * withdrawFeePct) / 100).toFixed(2));
+    const estNet = Number((amountNum - estRuleFee - selectedNetwork.withdrawFeeUsd).toFixed(2));
+    if (estNet <= 0) {
       setError(
-        `Withdrawal amount must exceed the ${formatUsd(selectedNetwork.withdrawFeeUsd)} network fee.`
+        `Withdrawal amount must exceed the ${withdrawFeePct}% withdrawal rule plus ${formatUsd(selectedNetwork.withdrawFeeUsd)} network fee.`
       );
       return;
     }
@@ -250,8 +300,9 @@ export function CryptoWalletView({
       setWithdrawAmount('');
       setWithdrawAddress('');
       setWithdrawMemo('');
+      const netOut = res.transaction.netAmount ?? estNet;
       setSuccessMsg(
-        `Withdrawal of ${formatUsd(res.transaction.amount)} ${selectedCoin.symbol} reserved in escrow and queued for Finance Department approval.`
+        `Withdrawal of ${formatUsd(res.transaction.amount)} ${selectedCoin.symbol} queued (${processingDays}-day processing). Estimated net payout after ${withdrawFeePct}% rule & network fee: ${formatUsd(netOut)}.`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to submit withdrawal.');
@@ -261,10 +312,16 @@ export function CryptoWalletView({
   };
 
   const parsedWithdraw = Number(withdrawAmount);
-  const netWithdraw =
-    Number.isFinite(parsedWithdraw) && parsedWithdraw > selectedNetwork.withdrawFeeUsd
-      ? parsedWithdraw - selectedNetwork.withdrawFeeUsd
-      : 0;
+  const validWithdrawInput = Number.isFinite(parsedWithdraw) && parsedWithdraw > 0;
+  const ruleFeeUsd = validWithdrawInput
+    ? Number(((parsedWithdraw * withdrawFeePct) / 100).toFixed(2))
+    : 0;
+  const netWithdraw = validWithdrawInput
+    ? Math.max(
+        0,
+        Number((parsedWithdraw - ruleFeeUsd - selectedNetwork.withdrawFeeUsd).toFixed(2))
+      )
+    : 0;
 
   return (
     <div className="pb-6 space-y-4">
@@ -435,8 +492,8 @@ export function CryptoWalletView({
                       </span>
                       <span className="text-[10px] font-mono tabular-nums text-[#6B7280] dark:text-[#94A3B8]">
                         {tab === 'deposit'
-                          ? `Min $${net.minDepositUsd}`
-                          : `Fee $${net.withdrawFeeUsd}`}
+                          ? `Min $${Math.max(net.minDepositUsd, minFleetDepositUsd ?? 650)}`
+                          : `Min $${Math.max(50, siteConfig?.minWithdrawUsd ?? 50, net.minWithdrawUsd)}`}
                       </span>
                     </div>
                     <p className="mt-0.5 text-[10px] text-[#6B7280] dark:text-[#94A3B8] truncate">
@@ -528,7 +585,7 @@ export function CryptoWalletView({
                 <p className="leading-relaxed">
                   Send only <strong>{selectedCoin.symbol}</strong> over{' '}
                   <strong>{selectedNetwork.networkName}</strong>. Minimum deposit{' '}
-                  {formatUsd(selectedNetwork.minDepositUsd)} ·{' '}
+                  <strong>{formatUsd(minDepositFloor)}</strong> (least expensive active fleet unit) ·{' '}
                   {selectedNetwork.confirmations}.
                 </p>
               </div>
@@ -554,7 +611,7 @@ export function CryptoWalletView({
                   htmlFor="app-deposit-amt"
                   className="block text-[11px] font-medium text-[#6B7280] dark:text-[#94A3B8] mb-1"
                 >
-                  Amount Sent (USD equivalent)
+                  Amount Sent (USD equivalent · Min {formatUsd(minDepositFloor)})
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-mono text-[#6B7280] dark:text-[#94A3B8]">
@@ -563,7 +620,7 @@ export function CryptoWalletView({
                   <input
                     id="app-deposit-amt"
                     type="number"
-                    min={selectedNetwork.minDepositUsd}
+                    min={minDepositFloor}
                     step="0.01"
                     value={depositAmount}
                     onChange={(e) => {
@@ -574,7 +631,7 @@ export function CryptoWalletView({
                   />
                 </div>
                 <div className="mt-2 grid grid-cols-4 gap-1.5">
-                  {[950, 1500, 2600, 4800].map((preset) => (
+                  {depositPresets.map((preset) => (
                     <button
                       key={preset}
                       type="button"
@@ -772,13 +829,28 @@ export function CryptoWalletView({
                 </div>
               )}
 
+              <div className="rounded-xl border border-[#BFDBFE] dark:border-[#1E3A8A] bg-[#EFF6FF] dark:bg-[#0F172A] p-3 text-[11px] text-[#1E3A8A] dark:text-[#93C5FD] space-y-1">
+                <div className="flex items-center justify-between gap-2 font-semibold">
+                  <span>Same-day yield payouts enabled</span>
+                  <span className="font-mono">
+                    {usedToday}/{dailyLimit} today
+                  </span>
+                </div>
+                <p className="text-[10.5px] leading-relaxed">
+                  Daily yields are withdrawable the same day they reach your wallet. Min withdraw{' '}
+                  <strong>{formatUsd(effectiveMinWithdraw)}</strong> ·{' '}
+                  <strong>{withdrawFeePct}%</strong> platform rule ·{' '}
+                  <strong>{processingDays}-day</strong> processing.
+                </p>
+              </div>
+
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label
                     htmlFor="app-withdraw-amt"
                     className="text-[11px] font-medium text-[#6B7280] dark:text-[#94A3B8]"
                   >
-                    Withdrawal Amount (USD)
+                    Withdrawal Amount (USD · Min ${effectiveMinWithdraw})
                   </label>
                   <span className="text-[10.5px] font-mono tabular-nums text-[#6B7280] dark:text-[#94A3B8]">
                     Avail: {formatUsd(investor.walletBalance)}
@@ -791,14 +863,14 @@ export function CryptoWalletView({
                   <input
                     id="app-withdraw-amt"
                     type="number"
-                    min={selectedNetwork.minWithdrawUsd}
+                    min={effectiveMinWithdraw}
                     step="0.01"
                     value={withdrawAmount}
                     onChange={(e) => {
                       setWithdrawAmount(e.target.value);
                       setError(null);
                     }}
-                    placeholder={`Min ${selectedNetwork.minWithdrawUsd}`}
+                    placeholder={`Min ${effectiveMinWithdraw}`}
                     className="w-full h-11 pl-7 pr-3.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono tabular-nums text-xs text-[#111827] dark:text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                   />
                 </div>
@@ -830,15 +902,31 @@ export function CryptoWalletView({
               <dl className="rounded-xl bg-[#F9FAFB] dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#1E293B] p-3 space-y-1.5 text-[11px]">
                 <div className="flex justify-between">
                   <dt className="text-[#6B7280] dark:text-[#94A3B8]">
+                    Withdrawal Rule ({withdrawFeePct}%)
+                  </dt>
+                  <dd className="font-mono tabular-nums text-[#D97706] dark:text-[#FBBF24]">
+                    -{formatUsd(ruleFeeUsd)}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[#6B7280] dark:text-[#94A3B8]">
                     Network Fee ({selectedNetwork.networkCode})
                   </dt>
                   <dd className="font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
-                    {formatUsd(selectedNetwork.withdrawFeeUsd)}
+                    -{formatUsd(selectedNetwork.withdrawFeeUsd)}
                   </dd>
                 </div>
-                <div className="flex justify-between font-semibold text-[#111827] dark:text-[#F8FAFC]">
-                  <dt>Estimated Net Receive</dt>
-                  <dd className="font-mono tabular-nums">{formatUsd(netWithdraw)}</dd>
+                <div className="flex justify-between">
+                  <dt className="text-[#6B7280] dark:text-[#94A3B8]">Processing Window</dt>
+                  <dd className="font-mono tabular-nums text-[#111827] dark:text-[#F8FAFC]">
+                    {processingDays} days · Max {dailyLimit}/day
+                  </dd>
+                </div>
+                <div className="pt-1.5 border-t border-[#E5E7EB] dark:border-[#1E293B] flex justify-between font-semibold text-[#111827] dark:text-[#F8FAFC]">
+                  <dt>Estimated Net Payout</dt>
+                  <dd className="font-mono tabular-nums text-[#059669] dark:text-[#34D399]">
+                    {formatUsd(netWithdraw)}
+                  </dd>
                 </div>
               </dl>
 
@@ -857,7 +945,7 @@ export function CryptoWalletView({
                       Verify Identity Now →
                     </button>
                   )}
-                  {isVerified && investor.walletBalance < selectedNetwork.minWithdrawUsd && (
+                  {isVerified && investor.walletBalance < effectiveMinWithdraw && (
                     <button
                       type="button"
                       onClick={() => {
@@ -880,17 +968,19 @@ export function CryptoWalletView({
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || usedToday >= dailyLimit}
                 className="w-full h-12 rounded-xl bg-[#111827] dark:bg-[#2563EB] hover:bg-[#1F2937] dark:hover:bg-[#1D4ED8] text-white text-xs font-semibold disabled:opacity-60 transition-colors cursor-pointer"
               >
                 {submitting
                   ? 'Submitting request...'
-                  : `Request ${selectedCoin.symbol} Withdrawal`}
+                  : usedToday >= dailyLimit
+                    ? `Daily Limit Reached (${dailyLimit}/${dailyLimit})`
+                    : `Request ${selectedCoin.symbol} Withdrawal`}
               </button>
 
               <p className="flex items-center justify-center gap-1 text-[10px] text-[#6B7280] dark:text-[#94A3B8]">
                 <ShieldCheck className="w-3 h-3" />
-                Held safely in escrow until Finance Department sends payout
+                Held safely in escrow for {processingDays}-day Finance Department settlement
               </p>
             </form>
           </div>

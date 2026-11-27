@@ -64,6 +64,7 @@ export type CorporateDepartment =
   | 'Finance Department'
   | 'Technical Department'
   | 'Compliance Department'
+  | 'Support Department'
   | 'Fleet Operations';
 
 export type AccountStatus = 'active' | 'suspended';
@@ -114,6 +115,7 @@ export interface InvestorProfile {
   referralBonusEarned: number;
   doubleYieldActiveUntil?: string;
   hasApprovedDeposit?: boolean;
+  createdByUserId?: string;
   createdAt: string;
 }
 
@@ -206,6 +208,11 @@ export interface WalletTransaction {
   memo?: string;
   txHash?: string;
   receiptImageUrl?: string;
+  feePct?: number;
+  ruleFeeUsd?: number;
+  networkFeeUsd?: number;
+  netAmount?: number;
+  processingDays?: number;
   reference: string;
   adminNote?: string;
   reviewedBy?: string;
@@ -243,6 +250,10 @@ export interface SiteConfig {
   referralDescription: string;
   referralRewardRatePct: number;
   referralDoubleYieldDays: number;
+  withdrawFeePct: number;
+  dailyWithdrawLimit: number;
+  withdrawProcessingDays: number;
+  minWithdrawUsd: number;
   footerNotice: string;
   howItWorksSteps: HowItWorksStep[];
 }
@@ -271,7 +282,8 @@ export interface AppNotification {
     | 'account'
     | 'admin'
     | 'news'
-    | 'rent';
+    | 'rent'
+    | 'support';
   createdAt: string;
 }
 
@@ -314,6 +326,43 @@ export interface PasswordResetRequest {
   resolvedAt?: string;
 }
 
+export type SupportTicketCategory =
+  | 'Account & KYC'
+  | 'Deposits & Withdrawals'
+  | 'Fleet & Yield'
+  | 'Technical Issue'
+  | 'Referral & Team'
+  | 'General Inquiry';
+
+export type SupportTicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
+export interface SupportMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  senderDepartment?: CorporateDepartment;
+  isStaff: boolean;
+  body: string;
+  imageUrl?: string;
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  investorId: string;
+  investorName: string;
+  investorEmail: string;
+  investorAvatarUrl?: string;
+  subject: string;
+  category: SupportTicketCategory;
+  status: SupportTicketStatus;
+  assignedDepartment: 'Support Department';
+  createdAt: string;
+  updatedAt: string;
+  messages: SupportMessage[];
+}
+
 export interface AdminOverviewData {
   summary: {
     totalUsers: number;
@@ -321,6 +370,7 @@ export interface AdminOverviewData {
     pendingWithdrawalsCount: number;
     pendingKycCount: number;
     pendingPasswordResetsCount: number;
+    openSupportTicketsCount: number;
     pendingDepositVolume: number;
     pendingWithdrawalVolume: number;
     activeRentalsCount: number;
@@ -331,6 +381,7 @@ export interface AdminOverviewData {
   pendingTransactions: WalletTransaction[];
   allTransactions: WalletTransaction[];
   passwordResetRequests: PasswordResetRequest[];
+  supportTickets: SupportTicket[];
   rentals: EnrichedMachineRental[];
   robots: RobotMachine[];
   dispatches: FleetDispatch[];

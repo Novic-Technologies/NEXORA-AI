@@ -4,9 +4,11 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Bell,
+  ChevronDown,
   ChevronRight,
   Cpu,
   Gift,
+  HelpCircle,
   MapPin,
   Megaphone,
   ShieldCheck,
@@ -55,6 +57,7 @@ export function OverviewView({
   onOpenPortfolio,
 }: OverviewViewProps) {
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(0);
 
   useEffect(() => {
     if (!showHowItWorks) return;
@@ -165,7 +168,7 @@ export function OverviewView({
           <div className="p-4 space-y-3.5">
             <p className="text-xs text-[#4B5563] dark:text-[#CBD5E1] leading-relaxed">
               {site?.heroDescription ||
-                'Select active Nexora AI robots operating across verified hubs. Fund leases via Binance-supported coins with Finance Department settlement oversight.'}
+                'Select from 114 unique Nexora AI robotic units deployed across Europe, Asia, and North America. Fund leases via 16 Binance-supported coins with Finance Department settlement.'}
             </p>
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -329,7 +332,9 @@ export function OverviewView({
                 Active Fleet Units
               </h2>
               <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
-                Live robotic hardware available for leasing
+                {stats
+                  ? `${stats.availableFleetUnits} open units · From ${formatUsd(stats.minDepositUsd).replace('.00', '')}`
+                  : 'Live robotic hardware available for leasing'}
               </p>
             </div>
             <button
@@ -477,7 +482,7 @@ export function OverviewView({
         </footer>
       </div>
 
-      {/* How It Works Sheet */}
+      {/* Comprehensive How It Works & Newcomer FAQ Sheet */}
       {showHowItWorks && (
         <div
           onClick={(e) => {
@@ -487,12 +492,17 @@ export function OverviewView({
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-[430px] bg-white dark:bg-[#111827] border-t border-[#E5E7EB] dark:border-[#1E293B] rounded-t-3xl p-5 space-y-4">
-            <div className="w-10 h-1 rounded-full bg-[#D1D5DB] dark:bg-[#334155] mx-auto" />
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC]">
-                How {brandName} works
-              </h3>
+          <div className="w-full max-w-[430px] max-h-[88dvh] flex flex-col bg-white dark:bg-[#111827] border-t border-[#E5E7EB] dark:border-[#1E293B] rounded-t-3xl p-5">
+            <div className="w-10 h-1 rounded-full bg-[#D1D5DB] dark:bg-[#334155] mx-auto shrink-0" />
+            <div className="flex items-center justify-between pt-3 pb-3 border-b border-[#F3F4F6] dark:border-[#1E293B] shrink-0">
+              <div>
+                <h3 className="font-display text-base font-bold text-[#111827] dark:text-[#F8FAFC]">
+                  How {brandName} works
+                </h3>
+                <p className="text-[11px] text-[#6B7280] dark:text-[#94A3B8]">
+                  Complete beginner guide &amp; frequently asked questions
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowHowItWorks(false)}
@@ -502,47 +512,127 @@ export function OverviewView({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="space-y-2.5 text-xs text-[#4B5563] dark:text-[#CBD5E1]">
-              {(site?.howItWorksSteps ?? [
-                {
-                  title: '01. Register, upload photo & verify ID',
-                  body: 'Create your account, add your profile photo, and submit your government ID (and optional proof of financial ability) for Compliance Department verification.',
-                },
-                {
-                  title: '02. Deposit crypto with Finance Dept review',
-                  body: 'Choose any of the Binance-supported coins, scan or copy the treasury address, and submit your TXID/screenshot. Funds credit as soon as the Finance Department confirms.',
-                },
-                {
-                  title: '03. Lease AI robots, invite team & earn 2x',
-                  body: 'Lease active robots, collect live accrued daily yield, and invite team members to unlock referral cash rewards plus 2x daily yields.',
-                },
-              ]).map((step, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-xl bg-[#F9FAFB] dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#1E293B] p-3.5"
-                >
-                  <p className="font-semibold text-[#111827] dark:text-[#F8FAFC] inline-flex items-center gap-1.5">
-                    {idx === 0 && <ShieldCheck className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />}
-                    <span>{step.title}</span>
-                  </p>
-                  <p className="mt-1 leading-relaxed">{step.body}</p>
-                </div>
-              ))}
+
+            <div className="flex-1 overflow-y-auto py-3.5 space-y-4 pr-0.5 text-xs text-[#4B5563] dark:text-[#CBD5E1]">
+              <div className="space-y-2.5">
+                {(site?.howItWorksSteps ?? [
+                  {
+                    title: '01. Invest across any of the 114 unique fleet units',
+                    body: `Invest in any active fleet unit or robot as much as your wallet balance allows—you can lease more than two fleet units simultaneously. Minimum crypto deposit starts at ${formatUsd(stats?.minDepositUsd ?? 650).replace('.00', '')} (the least expensive active fleet unit).`,
+                  },
+                  {
+                    title: '02. Fund via Binance crypto & collect daily yields',
+                    body: 'Register, complete KYC verification, select from 16 Binance-supported coins, and submit your TXID or screenshot. Once Finance approves your deposit, activate units to earn live daily returns.',
+                  },
+                  {
+                    title: '03. Same-day yield withdrawals & payout rules',
+                    body: `Daily yields can be withdrawn the very same day they arrive in your Available Wallet Balance. Minimum withdrawal is $${site?.minWithdrawUsd ?? 50} USD across all coins, limited to ${site?.dailyWithdrawLimit ?? 3} withdrawals per day, with a ${site?.withdrawFeePct ?? 27}% withdrawal rule applied and ${site?.withdrawProcessingDays ?? 2}-day processing.`,
+                  },
+                ]).map((step, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl bg-[#F9FAFB] dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#1E293B] p-3.5"
+                  >
+                    <p className="font-semibold text-[#111827] dark:text-[#F8FAFC] inline-flex items-center gap-1.5">
+                      {idx === 0 && (
+                        <ShieldCheck className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />
+                      )}
+                      <span>{step.title}</span>
+                    </p>
+                    <p className="mt-1 leading-relaxed">{step.body}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#6B7280] dark:text-[#94A3B8] inline-flex items-center gap-1.5">
+                  <HelpCircle className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />
+                  <span>Questions New Investors Ask</span>
+                </p>
+
+                {(
+                  [
+                    {
+                      q: 'Where do my returns come from?',
+                      a: `${brandName} leases real industrial, medical, agricultural, marine, inspection, and precision-manufacturing robots to enterprise hubs worldwide. When you fund an individual unit, commercial lease revenue pays a stated daily return straight into your Portfolio wallet.`,
+                    },
+                    {
+                      q: 'What is the minimum deposit and which coins work?',
+                      a: `Minimum deposit matches the lowest-priced active fleet unit (currently ${formatUsd(stats?.minDepositUsd ?? 650).replace('.00', '')}). You can fund using ${stats?.supportedCoins ?? 16} Binance-supported assets including USDT, USDC, FDUSD, SOL, BNB, BTC, ETH, TON, XRP, TRX, LTC, DOGE, ADA, AVAX, POL, and XLM.`,
+                    },
+                    {
+                      q: 'Can I invest in more than one or two machines?',
+                      a: 'Yes. Every machine in the catalog is an individual working unit, and you can lease as many units across different sectors as your Available Wallet Balance allows—whether one machine, two, or an entire multi-sector portfolio.',
+                    },
+                    {
+                      q: 'Why stays my deposit pending before showing in my wallet?',
+                      a: 'For security and accounting accuracy, crypto transfers never auto-credit from button clicks alone. Once you transfer and submit your TXID and optional screenshot, our Finance Department verifies blockchain settlement and credits your wallet.',
+                    },
+                    {
+                      q: 'When can I withdraw yields, and what rules apply?',
+                      a: `As soon as you collect accrued yields into your Available Wallet Balance, you can withdraw them the very same day. Minimum withdrawal is $${site?.minWithdrawUsd ?? 50} USD across all coins, capped at ${site?.dailyWithdrawLimit ?? 3} requests per day, with a ${site?.withdrawFeePct ?? 27}% platform withdrawal rule applied and a ${site?.withdrawProcessingDays ?? 2}-day Finance processing window.`,
+                    },
+                    {
+                      q: 'How does Identity Verification (KYC) work?',
+                      a: 'Every investor sets up a clear profile photo and uploads government ID details (National ID, Passport, or Driver License), plus optional proof of financial capacity. Once approved by our Compliance Department, withdrawals are unlocked.',
+                    },
+                    {
+                      q: 'How do team referrals and 2x double daily yields work?',
+                      a: `Share your unique invite code or link from Team & Rewards. When an invited member signs up and completes an approved crypto deposit, you earn an instant ${rewardPct}% bonus ($${((2600 * rewardPct) / 100).toFixed(0)} USD on a $2,600 machine) plus ${boostDays} days of 2x double daily yields on your active units.`,
+                    },
+                    {
+                      q: 'How do I get help or reset a forgotten password?',
+                      a: 'If you forget your password, submit a request on the Sign In screen and our Technical Department will assist you. Logged-in investors can open support tickets anytime under Portfolio → Support Desk and attach pictures with their messages.',
+                    },
+                  ] as const
+                ).map((faq, idx) => {
+                  const isOpen = openFaqIdx === idx;
+                  return (
+                    <div
+                      key={idx}
+                      className="rounded-xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#0F172A] overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setOpenFaqIdx(isOpen ? null : idx)}
+                        className="w-full px-3.5 py-2.5 flex items-center justify-between gap-2 text-left cursor-pointer"
+                      >
+                        <span className="text-[11.5px] font-semibold text-[#111827] dark:text-[#F8FAFC]">
+                          {faq.q}
+                        </span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-[#6B7280] shrink-0 transition-transform ${
+                            isOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                      {isOpen && (
+                        <div className="px-3.5 pb-3 text-[11px] text-[#4B5563] dark:text-[#CBD5E1] leading-relaxed border-t border-[#F3F4F6] dark:border-[#1E293B] pt-2">
+                          {faq.a}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setShowHowItWorks(false);
-                if (investor) {
-                  onExploreFleet();
-                } else {
-                  onOpenAuth('register');
-                }
-              }}
-              className="w-full h-11 rounded-xl bg-[#2563EB] text-white text-xs font-semibold cursor-pointer"
-            >
-              {investor ? 'Browse robotic machines' : 'Create investor account'}
-            </button>
+
+            <div className="pt-3 border-t border-[#F3F4F6] dark:border-[#1E293B] shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHowItWorks(false);
+                  if (investor) {
+                    onExploreFleet();
+                  } else {
+                    onOpenAuth('register');
+                  }
+                }}
+                className="w-full h-11 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer"
+              >
+                {investor ? 'Browse 114 robotic machines' : 'Create investor account'}
+              </button>
+            </div>
           </div>
         </div>
       )}

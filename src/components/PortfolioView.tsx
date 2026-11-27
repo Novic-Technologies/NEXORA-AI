@@ -13,6 +13,7 @@ import {
   Coins,
   FileText,
   Gift,
+  Headphones,
   Layers,
   LogOut,
   Settings,
@@ -37,6 +38,7 @@ interface PortfolioViewProps {
   rentals: EnrichedMachineRental[];
   transactions: WalletTransaction[];
   unreadNotifications: number;
+  openSupportTicketsCount?: number;
   loading: boolean;
   onRentalUpdated: (
     rental: EnrichedMachineRental,
@@ -50,6 +52,7 @@ interface PortfolioViewProps {
   onOpenVerification: () => void;
   onOpenNotifications: () => void;
   onOpenReferrals: () => void;
+  onOpenSupport: () => void;
   onOpenAdmin?: () => void;
   onSignOut: () => void;
 }
@@ -59,6 +62,7 @@ export function PortfolioView({
   rentals,
   transactions,
   unreadNotifications,
+  openSupportTicketsCount = 0,
   loading,
   onRentalUpdated,
   onBrowseMachines,
@@ -68,6 +72,7 @@ export function PortfolioView({
   onOpenVerification,
   onOpenNotifications,
   onOpenReferrals,
+  onOpenSupport,
   onOpenAdmin,
   onSignOut,
 }: PortfolioViewProps) {
@@ -284,7 +289,7 @@ export function PortfolioView({
                   Open Corporate Department Console
                 </p>
                 <p className="text-[10.5px] text-[#C7D2FE]">
-                  Finance, Compliance, Technical &amp; Fleet Operations
+                  Finance, Compliance, Technical, Support &amp; Fleet Operations
                 </p>
               </div>
             </div>
@@ -700,12 +705,27 @@ export function PortfolioView({
 
           <button
             type="button"
+            onClick={onOpenSupport}
+            className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
+          >
+            <span className="inline-flex items-center gap-3">
+              <Headphones className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
+              <span>
+                Support Desk &amp; Help Tickets
+                {openSupportTicketsCount > 0 ? ` (${openSupportTicketsCount} active)` : ''}
+              </span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-[#9CA3AF]" />
+          </button>
+
+          <button
+            type="button"
             onClick={onOpenAccount}
             className="w-full px-4 py-3.5 flex items-center justify-between text-xs font-medium text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
           >
             <span className="inline-flex items-center gap-3">
               <Settings className="w-4 h-4 text-[#6B7280] dark:text-[#94A3B8]" />
-              <span>Profile photo, theme & app install</span>
+              <span>Profile photo, theme &amp; app install</span>
             </span>
             <ChevronRight className="w-4 h-4 text-[#9CA3AF]" />
           </button>

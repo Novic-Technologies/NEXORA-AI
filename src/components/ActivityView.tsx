@@ -164,6 +164,16 @@ export function ActivityView({
                     <p className="text-xs font-semibold text-[#0F172A] dark:text-[#F8FAFC] truncate">
                       {tx.reference}
                     </p>
+                    {tx.type === 'withdraw' &&
+                      (tx.netAmount !== undefined || tx.ruleFeeUsd !== undefined) && (
+                        <p className="text-[10.5px] font-mono text-[#475569] dark:text-[#94A3B8]">
+                          Rule ({tx.feePct ?? 27}%): -{formatUsd(tx.ruleFeeUsd ?? 0)} · Net:{' '}
+                          <span className="font-semibold text-[#0F172A] dark:text-[#F8FAFC]">
+                            {formatUsd(tx.netAmount ?? tx.amount)}
+                          </span>{' '}
+                          · {tx.processingDays ?? 2}d processing
+                        </p>
+                      )}
                     {tx.adminNote && (
                       <p className="text-[10.5px] text-[#64748B] dark:text-[#94A3B8] italic">
                         Department note: {tx.adminNote}

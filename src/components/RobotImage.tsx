@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bot } from 'lucide-react';
 
 interface RobotImageProps {
@@ -9,6 +9,10 @@ interface RobotImageProps {
 
 export function RobotImage({ src, alt, className = '' }: RobotImageProps) {
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
 
   if (failed || !src) {
     return (
@@ -29,6 +33,8 @@ export function RobotImage({ src, alt, className = '' }: RobotImageProps) {
     <img
       src={src}
       alt={alt}
+      loading="lazy"
+      decoding="async"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
       className={className}

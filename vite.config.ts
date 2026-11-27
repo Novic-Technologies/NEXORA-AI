@@ -53,7 +53,21 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,webp,woff,woff2}'],
+          globIgnores: ['fleet-units/**'],
           navigateFallbackDenylist: [/^\/api\//, /^\/ws/],
+          runtimeCaching: [
+            {
+              urlPattern: /\/fleet-units\/.*\.webp$/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'nexora-fleet-units-v1',
+                expiration: {
+                  maxEntries: 400,
+                  maxAgeSeconds: 60 * 60 * 24 * 30,
+                },
+              },
+            },
+          ],
         },
         devOptions: {
           enabled: true,

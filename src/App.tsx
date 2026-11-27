@@ -26,6 +26,7 @@ import { OverviewView } from './components/OverviewView.tsx';
 import { PortfolioView } from './components/PortfolioView.tsx';
 import { OfflineIndicator } from './components/PWAInstallButton.tsx';
 import { ReferralsView } from './components/ReferralsView.tsx';
+import { SupportView } from './components/SupportView.tsx';
 import { VerificationView } from './components/VerificationView.tsx';
 import {
   fetchAdminOverview,
@@ -35,6 +36,7 @@ import {
   fetchReferrals,
   fetchRentals,
   fetchRobots,
+  fetchSupportTickets,
   fetchTransactions,
   getAuthToken,
   logoutInvestor,
@@ -53,6 +55,7 @@ import type {
   ReferralSummary,
   RobotMachine,
   SiteConfig,
+  SupportTicket,
   WalletTransaction,
 } from './types.ts';
 
@@ -67,6 +70,7 @@ type AppScreen =
   | 'verification'
   | 'notifications'
   | 'referrals'
+  | 'support'
   | 'admin'
   | 'auth';
 
@@ -93,7 +97,7 @@ export default function App() {
   const [showQuickSheet, setShowQuickSheet] = useState(false);
 
   const [investor, setInvestor] = useState<InvestorProfile | null>(null);
-  const [authChecking, setAuthChecking] = useState(true);
+  const [authChecking, setAuthChecking] = useState<boolean>(() => Boolean(getAuthToken()));
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [robots, setRobots] = useState<RobotMachine[]>([]);
   const [rentals, setRentals] = useState<EnrichedMachineRental[]>([]);
@@ -101,6 +105,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [adminData, setAdminData] = useState<AdminOverviewData | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -108,6 +113,8 @@ export default function App() {
   const [liveToast, setLiveToast] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const wsReconnectTimerRef = useRef<number | null>(null);
+  const unmountedRef = useRef(false);
   const investorRef = useRef<InvestorProfile | null>(null);
   investorRef.current = investor;
 
@@ -138,12 +145,13 @@ export default function App() {
     setWorkspaceLoading(true);
     setGlobalError(null);
     try {
-      const [robotsRes, rentalsRes, txRes, notifRes, refRes] = await Promise.all([
+      const [robotsRes, rentalsRes, txRes, notifRes, refRes, supportRes] = await Promise.all([
         fetchRobots(),
         fetchRentals(),
         fetchTransactions(),
         fetchNotifications(),
         fetchReferrals(),
+        fetchSupportTickets().catch(() => ({ tickets: [] as SupportTicket[] })),
       ]);
       setRobots(robotsRes.robots);
       setRentals(rentalsRes.rentals);
@@ -151,6 +159,7 @@ export default function App() {
       setNotifications(notifRes.notifications);
       setUnreadNotifications(notifRes.unreadCount);
       setReferralSummary(refRes);
+      setSupportTickets(supportRes.tickets);
     } catch (err) {
       setGlobalError(
         err instanceof Error ? err.message : 'Unable to refresh app data.'
@@ -161,6 +170,10 @@ export default function App() {
   }, []);
 
   const connectWebSocket = useCallback(() => {
+    if (wsReconnectTimerRef.current !== null) {
+      window.clearTimeout(wsReconnectTimerRef.current);
+      wsReconnectTimerRef.current = null;
+    }
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -180,10 +193,12 @@ export default function App() {
           transaction?: WalletTransaction;
           rentals?: EnrichedMachineRental[];
           robots?: RobotMachine[];
+          minDepositUsd?: number;
           dispatches?: FleetDispatch[];
           siteConfig?: SiteConfig;
           cryptoCoins?: BinanceCoinConfig[];
           appNotification?: AppNotification;
+          supportTicket?: SupportTicket;
           notification?: string;
         };
 
@@ -195,11 +210,12 @@ export default function App() {
             .catch(() => {});
         } else if (msg.type === 'fleet:updated' && Array.isArray(msg.robots)) {
           setRobots(msg.robots);
+          const openRobots = msg.robots.filter((r) => r.availableUnits > 0);
           setOverview((prev) =>
             prev
               ? {
                   ...prev,
-                  featuredRobots: msg.robots!.slice(0, 8),
+                  featuredRobots: (openRobots.length > 0 ? openRobots : msg.robots!).slice(0, 12),
                   stats: {
                     ...prev.stats,
                     totalFleetUnits: msg.robots!.reduce((s, r) => s + r.totalUnits, 0),
@@ -207,6 +223,10 @@ export default function App() {
                       (s, r) => s + r.availableUnits,
                       0
                     ),
+                    minDepositUsd:
+                      typeof msg.minDepositUsd === 'number'
+                        ? msg.minDepositUsd
+                        : prev.stats.minDepositUsd,
                   },
                 }
               : prev
@@ -216,6 +236,9 @@ export default function App() {
             prev ? { ...prev, dispatches: msg.dispatches! } : prev
           );
         } else if (msg.type === 'site:updated' && msg.siteConfig) {
+          if (msg.siteConfig.brandName) {
+            document.title = `${msg.siteConfig.brandName} — ${msg.siteConfig.brandSubtitle}`;
+          }
           setOverview((prev) =>
             prev ? { ...prev, siteConfig: msg.siteConfig! } : prev
           );
@@ -261,6 +284,18 @@ export default function App() {
             if (prev.some((t) => t.id === msg.transaction!.id)) return prev;
             return [msg.transaction!, ...prev];
           });
+        } else if (msg.type === 'support:updated' && msg.supportTicket) {
+          setSupportTickets((prev) => {
+            const exists = prev.some((t) => t.id === msg.supportTicket!.id);
+            const next = exists
+              ? prev.map((t) => (t.id === msg.supportTicket!.id ? msg.supportTicket! : t))
+              : [msg.supportTicket!, ...prev];
+            return [...next].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+          });
+          if (msg.notification) {
+            showToast(msg.notification);
+          }
+          void refreshAdminData();
         } else if (msg.type === 'admin:queue_updated') {
           if (msg.notification) {
             showToast(msg.notification);
@@ -276,10 +311,39 @@ export default function App() {
       if (wsRef.current === ws) {
         wsRef.current = null;
       }
+      if (!unmountedRef.current) {
+        wsReconnectTimerRef.current = window.setTimeout(() => {
+          if (!unmountedRef.current) {
+            connectWebSocket();
+          }
+        }, 2500);
+      }
     };
   }, [refreshAdminData, showToast]);
 
+  const refreshSystemData = useCallback(async () => {
+    await Promise.all([
+      refreshAdminData(),
+      fetchOverview()
+        .then((data) => {
+          setOverview(data);
+          if (data.siteConfig?.brandName) {
+            document.title = `${data.siteConfig.brandName} — ${data.siteConfig.brandSubtitle}`;
+          }
+        })
+        .catch(() => {}),
+      fetchRobots()
+        .then((res) => setRobots(res.robots))
+        .catch(() => {}),
+      investorRef.current
+        ? loadWorkspaceData().catch(() => {})
+        : Promise.resolve(),
+    ]);
+  }, [loadWorkspaceData, refreshAdminData]);
+
   useEffect(() => {
+    unmountedRef.current = false;
+
     fetchOverview()
       .then((data) => {
         setOverview(data);
@@ -293,29 +357,40 @@ export default function App() {
       .then((res) => setRobots(res.robots))
       .catch(() => {});
 
-    fetchCurrentInvestor()
-      .then(async (res) => {
-        setInvestor(res.investor);
-        await loadWorkspaceData();
-        if (
-          res.investor.role === 'master_admin' ||
-          res.investor.role === 'admin' ||
-          res.investor.role === 'moderator'
-        ) {
-          fetchAdminOverview()
-            .then((d) => setAdminData(d))
-            .catch(() => {});
-        }
-      })
-      .catch(() => {
-        setInvestor(null);
-      })
-      .finally(() => {
-        setAuthChecking(false);
-        connectWebSocket();
-      });
+    if (getAuthToken()) {
+      fetchCurrentInvestor()
+        .then((res) => {
+          setInvestor(res.investor);
+          setAuthChecking(false);
+          void loadWorkspaceData();
+          if (
+            res.investor.role === 'master_admin' ||
+            res.investor.role === 'admin' ||
+            res.investor.role === 'moderator'
+          ) {
+            fetchAdminOverview()
+              .then((d) => setAdminData(d))
+              .catch(() => {});
+          }
+        })
+        .catch(() => {
+          setInvestor(null);
+          setAuthChecking(false);
+        })
+        .finally(() => {
+          connectWebSocket();
+        });
+    } else {
+      setAuthChecking(false);
+      connectWebSocket();
+    }
 
     return () => {
+      unmountedRef.current = true;
+      if (wsReconnectTimerRef.current !== null) {
+        window.clearTimeout(wsReconnectTimerRef.current);
+        wsReconnectTimerRef.current = null;
+      }
       wsRef.current?.close();
     };
   }, [connectWebSocket, loadWorkspaceData]);
@@ -355,6 +430,7 @@ export default function App() {
       next === 'verification' ||
       next === 'notifications' ||
       next === 'referrals' ||
+      next === 'support' ||
       next === 'admin';
 
     if (requiresAuth && !investor) {
@@ -375,6 +451,10 @@ export default function App() {
     } else if (next === 'referrals' && investor) {
       fetchReferrals()
         .then((res) => setReferralSummary(res))
+        .catch(() => {});
+    } else if (next === 'support' && investor) {
+      fetchSupportTickets()
+        .then((res) => setSupportTickets(res.tickets))
         .catch(() => {});
     }
 
@@ -416,6 +496,7 @@ export default function App() {
     setNotifications([]);
     setUnreadNotifications(0);
     setReferralSummary(null);
+    setSupportTickets([]);
     setAdminData(null);
     connectWebSocket();
     setScreen('home');
@@ -527,11 +608,15 @@ export default function App() {
             </div>
           )}
 
-          {authChecking ? (
+          {authChecking &&
+          screen !== 'home' &&
+          screen !== 'rent' &&
+          screen !== 'news' &&
+          screen !== 'auth' ? (
             <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-3">
               <BrandLogo size="lg" brandName={brandName} />
               <p className="text-xs font-medium text-[#6B7280] dark:text-[#94A3B8]">
-                Connecting to live fleet...
+                Loading your portfolio...
               </p>
             </div>
           ) : screen === 'auth' ? (
@@ -604,6 +689,9 @@ export default function App() {
               key={`${walletTab}-${suggestedDepositUsd ?? 'none'}`}
               investor={investor}
               cryptoCoins={overview?.cryptoCoins}
+              siteConfig={overview?.siteConfig}
+              minFleetDepositUsd={overview?.stats?.minDepositUsd}
+              transactions={transactions}
               initialTab={walletTab}
               suggestedDepositUsd={suggestedDepositUsd}
               onBack={() => navigateTo('mine')}
@@ -637,12 +725,29 @@ export default function App() {
               onBack={() => navigateTo('mine')}
               onBrowseRobots={() => navigateTo('rent')}
             />
+          ) : screen === 'support' && investor ? (
+            <SupportView
+              investor={investor}
+              tickets={supportTickets}
+              loading={workspaceLoading}
+              onBack={() => navigateTo('mine')}
+              onTicketUpdated={(updatedTicket) =>
+                setSupportTickets((prev) => {
+                  const exists = prev.some((t) => t.id === updatedTicket.id);
+                  const next = exists
+                    ? prev.map((t) => (t.id === updatedTicket.id ? updatedTicket : t))
+                    : [updatedTicket, ...prev];
+                  return [...next].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+                })
+              }
+            />
           ) : screen === 'admin' && investor && isStaff ? (
             <AdminView
               currentUser={investor}
               data={adminData}
               loading={adminLoading}
               onRefresh={refreshAdminData}
+              onSystemRefresh={refreshSystemData}
             />
           ) : screen === 'activity' && investor ? (
             <ActivityView
@@ -667,6 +772,10 @@ export default function App() {
               rentals={rentals}
               transactions={transactions}
               unreadNotifications={unreadNotifications}
+              openSupportTicketsCount={
+                supportTickets.filter((t) => t.status === 'open' || t.status === 'in_progress')
+                  .length
+              }
               loading={workspaceLoading}
               onRentalUpdated={handleRentalUpdated}
               onBrowseMachines={() => navigateTo('rent')}
@@ -676,6 +785,7 @@ export default function App() {
               onOpenVerification={() => navigateTo('verification')}
               onOpenNotifications={() => navigateTo('notifications')}
               onOpenReferrals={() => navigateTo('referrals')}
+              onOpenSupport={() => navigateTo('support')}
               onOpenAdmin={isStaff ? () => navigateTo('admin') : undefined}
               onSignOut={handleSignOut}
             />
@@ -778,7 +888,8 @@ export default function App() {
                     {(adminData?.summary.pendingDepositsCount ?? 0) +
                       (adminData?.summary.pendingWithdrawalsCount ?? 0) +
                       (adminData?.summary.pendingKycCount ?? 0) +
-                      (adminData?.summary.pendingPasswordResetsCount ?? 0) >
+                      (adminData?.summary.pendingPasswordResetsCount ?? 0) +
+                      (adminData?.summary.openSupportTicketsCount ?? 0) >
                       0 && (
                       <span className="absolute top-0.5 right-1.5 w-2 h-2 rounded-full bg-[#D97706]" />
                     )}
@@ -833,7 +944,8 @@ export default function App() {
                     screen === 'account' ||
                     screen === 'verification' ||
                     screen === 'notifications' ||
-                    screen === 'referrals'
+                    screen === 'referrals' ||
+                    screen === 'support'
                       ? 'bg-[#EFF6FF] dark:bg-[#1E3A8A]/50 text-[#2563EB] dark:text-[#60A5FA]'
                       : 'text-[#6B7280] dark:text-[#94A3B8]'
                   }`}
@@ -851,7 +963,8 @@ export default function App() {
                     screen === 'account' ||
                     screen === 'verification' ||
                     screen === 'notifications' ||
-                    screen === 'referrals'
+                    screen === 'referrals' ||
+                    screen === 'support'
                       ? 'text-[#2563EB] dark:text-[#60A5FA]'
                       : 'text-[#6B7280] dark:text-[#94A3B8]'
                   }`}

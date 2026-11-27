@@ -14,11 +14,14 @@ import {
   EyeOff,
   FileCheck2,
   Globe,
+  Headphones,
+  Image as ImageIcon,
   KeyRound,
   Megaphone,
   Plus,
   RefreshCw,
   Search,
+  Send,
   Trash2,
   Upload,
   UserPlus,
@@ -32,12 +35,14 @@ import {
   deleteAdminDispatch,
   deleteAdminRental,
   deleteAdminRobot,
+  deleteAdminSupportTicket,
   deleteAdminTransaction,
   deleteAdminUser,
   dismissPasswordResetRequest,
   formatDateTime,
   formatUsd,
   publishFleetDispatch,
+  replyAdminSupportTicket,
   resetUserPasswordByTech,
   reviewAdminTransaction,
   reviewUserKyc,
@@ -46,6 +51,7 @@ import {
   updateAdminDispatch,
   updateAdminRental,
   updateAdminRobot,
+  updateAdminSupportTicketStatus,
   updateAdminUser,
   updateCryptoNetwork,
   updateSiteConfig,
@@ -69,6 +75,7 @@ import type {
   RobotCategory,
   RobotMachine,
   SiteConfig,
+  SupportTicketStatus,
   UserRole,
 } from '../types.ts';
 import { CountrySelectField, PhoneDialInputField } from './CountryPhonePicker.tsx';
@@ -78,14 +85,15 @@ interface AdminViewProps {
   data: AdminOverviewData | null;
   loading: boolean;
   onRefresh: () => Promise<void>;
+  onSystemRefresh?: () => Promise<void>;
 }
 
-type AdminTab = 'transfers' | 'kyc' | 'users' | 'fleet' | 'cms';
+type AdminTab = 'transfers' | 'kyc' | 'support' | 'users' | 'fleet' | 'cms';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   master_admin: 'Executive Ops',
   admin: 'Dept Officer',
-  moderator: 'Compliance Desk',
+  moderator: 'Compliance & Support',
   investor: 'Investor',
 };
 
@@ -94,8 +102,16 @@ const DEPARTMENTS: CorporateDepartment[] = [
   'Finance Department',
   'Technical Department',
   'Compliance Department',
+  'Support Department',
   'Fleet Operations',
 ];
+
+const SUPPORT_STATUS_LABELS: Record<SupportTicketStatus, string> = {
+  open: 'Open',
+  in_progress: 'In Progress',
+  resolved: 'Resolved',
+  closed: 'Closed',
+};
 
 const ROBOT_CATEGORIES: RobotCategory[] = [
   'Warehouse & Logistics',
@@ -110,12 +126,15 @@ export function AdminView({
   data,
   loading,
   onRefresh,
+  onSystemRefresh,
 }: AdminViewProps) {
   const [tab, setTab] = useState<AdminTab>('transfers');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [noteById, setNoteById] = useState<Record<string, string>>({});
+  const [fleetSearch, setFleetSearch] = useState('');
+  const [fleetVisible, setFleetVisible] = useState(24);
   const [previewImg, setPreviewImg] = useState<{ title: string; url: string } | null>(
     null
   );
@@ -192,6 +211,12 @@ export function AdminView({
   // SiteConfig editor form (initialized lazily from data.siteConfig when opened)
   const [siteDraft, setSiteDraft] = useState<SiteConfig | null>(null);
 
+  // Support Department state (pictures & text messages only)
+  const [supportStatusFilter, setSupportStatusFilter] = useState<'all' | SupportTicketStatus>('all');
+  const [supportSearch, setSupportSearch] = useState('');
+  const [supportReplyByTicket, setSupportReplyByTicket] = useState<Record<string, string>>({});
+  const [supportImgByTicket, setSupportImgByTicket] = useState<Record<string, string>>({});
+
   // Crypto Wallet editor
   const [coinSymbol, setCoinSymbol] = useState<BinanceCoinSymbol>('USDT');
   const [networkCode, setNetworkCode] = useState<BinanceNetworkCode>('TRC20');
@@ -202,6 +227,21 @@ export function AdminView({
   const [coinFee, setCoinFee] = useState('1');
 
   const isMaster = currentUser.role === 'master_admin';
+  const canManageDownwardUsers = isMaster || currentUser.role === 'admin';
+  const assignableRoles: UserRole[] = isMaster
+    ? ['investor', 'moderator', 'admin']
+    : ['investor', 'moderator'];
+  const selectableDepartments = isMaster
+    ? DEPARTMENTS
+    : DEPARTMENTS.filter((d) => d !== 'Executive Operations');
+
+  const syncAll = useCallback(async () => {
+    if (onSystemRefresh) {
+      await onSystemRefresh();
+    } else {
+      await onRefresh();
+    }
+  }, [onRefresh, onSystemRefresh]);
 
   const clearStatus = () => {
     setError(null);
@@ -338,7 +378,7 @@ export function AdminView({
         action,
         adminNote: noteById[txId]?.trim() || undefined,
       });
-      await onRefresh();
+      await syncAll();
       setFeedback(
         action === 'approve'
           ? 'Transaction approved, balance & referral rewards processed live.'
@@ -356,7 +396,7 @@ export function AdminView({
     clearStatus();
     try {
       await deleteAdminTransaction(txId);
-      await onRefresh();
+      await syncAll();
       setFeedback('Transaction record removed from ledger.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to delete transaction.');
@@ -373,7 +413,7 @@ export function AdminView({
         action,
         reviewNote: noteById[userId]?.trim() || undefined,
       });
-      await onRefresh();
+      await syncAll();
       setFeedback(
         action === 'approve' ? 'Identity verification approved.' : 'Identity verification declined.'
       );
@@ -389,7 +429,7 @@ export function AdminView({
     clearStatus();
     try {
       await updateUserRole(userId, { role });
-      await onRefresh();
+      await syncAll();
       setFeedback(`Role updated to ${ROLE_LABELS[role]}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update user role.');
@@ -406,7 +446,7 @@ export function AdminView({
     clearStatus();
     try {
       await updateUserRole(userId, { accountStatus: nextStatus });
-      await onRefresh();
+      await syncAll();
       setFeedback(`Account status set to ${nextStatus}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update account status.');
@@ -438,7 +478,7 @@ export function AdminView({
       setNewUserPhone('');
       setNewUserCountry('');
       setNewUserBalance('0');
-      await onRefresh();
+      await syncAll();
       setFeedback('Account created and synced across Nexora AI departments.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create user.');
@@ -471,7 +511,7 @@ export function AdminView({
         doubleYieldDays: Number(editBoostDays) > 0 ? Number(editBoostDays) : undefined,
       });
       setEditingUser(null);
-      await onRefresh();
+      await syncAll();
       setFeedback('User details, balance & department permissions updated live.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update user.');
@@ -493,7 +533,7 @@ export function AdminView({
       setPwResetModal(null);
       setTechNewPw('');
       setTechResetNote('');
-      await onRefresh();
+      await syncAll();
       setFeedback(`Password reset applied for ${res.user.fullName} by Technical Department.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to reset user password.');
@@ -507,7 +547,7 @@ export function AdminView({
     clearStatus();
     try {
       await dismissPasswordResetRequest(reqId);
-      await onRefresh();
+      await syncAll();
       setFeedback('Password ticket closed by Technical Department.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to dismiss ticket.');
@@ -521,7 +561,7 @@ export function AdminView({
     clearStatus();
     try {
       await deleteAdminUser(u.id);
-      await onRefresh();
+      await syncAll();
       setFeedback(`Removed ${u.fullName} and associated records.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to delete user.');
@@ -558,7 +598,7 @@ export function AdminView({
         setFeedback(`Added ${payload.name} to the live catalog.`);
       }
       setRobotModalOpen(false);
-      await onRefresh();
+      await syncAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save machine.');
     } finally {
@@ -571,7 +611,7 @@ export function AdminView({
     clearStatus();
     try {
       await deleteAdminRobot(id);
-      await onRefresh();
+      await syncAll();
       setFeedback('Robot machine removed from catalog.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to delete robot.');
@@ -588,7 +628,7 @@ export function AdminView({
     clearStatus();
     try {
       await updateAdminRental(rentalId, payload);
-      await onRefresh();
+      await syncAll();
       setFeedback('Rental contract updated immediately.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update rental.');
@@ -602,7 +642,7 @@ export function AdminView({
     clearStatus();
     try {
       await deleteAdminRental(rentalId);
-      await onRefresh();
+      await syncAll();
       setFeedback('Rental contract deleted.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to delete rental.');
@@ -616,7 +656,7 @@ export function AdminView({
     clearStatus();
     try {
       const res = await advanceAllRentalsCycle();
-      await onRefresh();
+      await syncAll();
       setFeedback(`Credited +24h operating cycle across ${res.updated} active rental(s).`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to advance cycle.');
@@ -651,7 +691,7 @@ export function AdminView({
       setDispTitle('');
       setDispSummary('');
       setDispImageUrl('');
-      await onRefresh();
+      await syncAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save dispatch.');
     } finally {
@@ -664,7 +704,7 @@ export function AdminView({
     clearStatus();
     try {
       await deleteAdminDispatch(id);
-      await onRefresh();
+      await syncAll();
       setFeedback('Dispatch removed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to delete dispatch.');
@@ -680,9 +720,10 @@ export function AdminView({
     setBusyId('site-cfg');
     clearStatus();
     try {
-      await updateSiteConfig(target);
-      await onRefresh();
-      setFeedback('App display copy, referral rates & hero updated system-wide.');
+      const res = await updateSiteConfig(target);
+      setSiteDraft(res.siteConfig);
+      await syncAll();
+      setFeedback('App display copy, withdrawal rules & referral settings applied immediately system-wide.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save site settings.');
     } finally {
@@ -704,7 +745,7 @@ export function AdminView({
         minWithdrawUsd: Number(coinMinWith),
         withdrawFeeUsd: Number(coinFee),
       });
-      await onRefresh();
+      await syncAll();
       setFeedback(`${coinSymbol} (${networkCode}) wallet updated system-wide.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update crypto address.');
@@ -733,6 +774,67 @@ export function AdminView({
     }
   };
 
+  const handleSupportReply = async (e: FormEvent, ticketId: string) => {
+    e.preventDefault();
+    const message = (supportReplyByTicket[ticketId] ?? '').trim();
+    const imageUrl = supportImgByTicket[ticketId];
+    if (!message && !imageUrl) {
+      setError('Enter a reply message or attach a PNG/JPG/WebP picture.');
+      return;
+    }
+    setBusyId(`support-reply-${ticketId}`);
+    clearStatus();
+    try {
+      await replyAdminSupportTicket(ticketId, {
+        message,
+        imageUrl,
+      });
+      setSupportReplyByTicket((prev) => ({ ...prev, [ticketId]: '' }));
+      setSupportImgByTicket((prev) => {
+        const next = { ...prev };
+        delete next[ticketId];
+        return next;
+      });
+      await syncAll();
+      setFeedback('Support Department reply delivered to investor.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send support reply.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleSupportStatusChange = async (
+    ticketId: string,
+    status: SupportTicketStatus
+  ) => {
+    setBusyId(`support-status-${ticketId}`);
+    clearStatus();
+    try {
+      await updateAdminSupportTicketStatus(ticketId, { status });
+      await syncAll();
+      setFeedback(`Support ticket marked ${SUPPORT_STATUS_LABELS[status]}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update ticket status.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDeleteSupportTicket = async (ticketId: string) => {
+    setBusyId(`support-del-${ticketId}`);
+    clearStatus();
+    try {
+      await deleteAdminSupportTicket(ticketId);
+      await syncAll();
+      setFeedback('Support ticket removed.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete support ticket.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const summary = data?.summary;
   const pendingTx = data?.pendingTransactions ?? [];
   const allTx = data?.allTransactions ?? [];
@@ -752,6 +854,42 @@ export function AdminView({
     );
   }, [allUsers, userSearch]);
 
+  const filteredSupportTickets = useMemo(() => {
+    const list = data?.supportTickets ?? [];
+    const q = supportSearch.trim().toLowerCase();
+    return list.filter((t) => {
+      if (supportStatusFilter !== 'all' && t.status !== supportStatusFilter) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        t.subject.toLowerCase().includes(q) ||
+        t.investorName.toLowerCase().includes(q) ||
+        t.investorEmail.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q)
+      );
+    });
+  }, [data?.supportTickets, supportSearch, supportStatusFilter]);
+
+  const filteredRobots = useMemo(() => {
+    const robots = data?.robots ?? [];
+    const q = fleetSearch.trim().toLowerCase();
+    if (!q) return robots;
+    return robots.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        r.modelCode.toLowerCase().includes(q) ||
+        r.facilityHub.toLowerCase().includes(q) ||
+        r.category.toLowerCase().includes(q)
+    );
+  }, [data?.robots, fleetSearch]);
+
+  const minActiveFleetUsd = useMemo(() => {
+    const open = (data?.robots ?? []).filter((r) => r.availableUnits > 0);
+    if (open.length === 0) return 650;
+    return Math.min(...open.map((r) => r.rentalPrice));
+  }, [data?.robots]);
+
   const activeSite = siteDraft ?? data?.siteConfig;
   const coins = data?.cryptoCoins ?? [];
   const pendingPwRequests = (data?.passwordResetRequests ?? []).filter(
@@ -770,7 +908,7 @@ export function AdminView({
               Nexora Department Console
             </h1>
             <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] truncate">
-              Finance · Compliance · Technical · Fleet Ops
+              Finance · Compliance · Support · Tech · Fleet Ops
             </p>
           </div>
         </div>
@@ -801,13 +939,15 @@ export function AdminView({
           </div>
           <div className="p-3">
             <p className="text-[10px] font-medium text-[#6B7280] dark:text-[#94A3B8]">
-              Compliance &amp; Tech
+              Support &amp; Desk
             </p>
             <p className="mt-1 font-mono text-base font-bold text-[#2563EB] dark:text-[#60A5FA]">
-              {(summary?.pendingKycCount ?? 0) + (summary?.pendingPasswordResetsCount ?? 0)}
+              {(summary?.openSupportTicketsCount ?? 0) +
+                (summary?.pendingKycCount ?? 0) +
+                (summary?.pendingPasswordResetsCount ?? 0)}
             </p>
             <p className="text-[10px] text-[#6B7280] dark:text-[#94A3B8]">
-              {summary?.pendingKycCount ?? 0} KYC · {summary?.pendingPasswordResetsCount ?? 0} PW
+              {summary?.openSupportTicketsCount ?? 0} Tkt · {summary?.pendingKycCount ?? 0} KYC · {summary?.pendingPasswordResetsCount ?? 0} PW
             </p>
           </div>
           <div className="p-3">
@@ -829,6 +969,7 @@ export function AdminView({
             [
               ['transfers', `Finance Dept (${pendingTx.length})`],
               ['kyc', `Compliance (${summary?.pendingKycCount ?? 0})`],
+              ['support', `Support Dept (${summary?.openSupportTicketsCount ?? 0})`],
               [
                 'users',
                 `Tech & Users (${allUsers.length}${pendingPwRequests.length > 0 ? ` · ${pendingPwRequests.length} PW` : ''})`,
@@ -1193,13 +1334,235 @@ export function AdminView({
               })
             )}
           </div>
+        ) : tab === 'support' ? (
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-[#BFDBFE] dark:border-blue-900/60 bg-blue-50/70 dark:bg-blue-950/30 p-3 flex items-center gap-2.5">
+              <Headphones className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA] shrink-0" />
+              <p className="text-[11px] text-[#1E3A8A] dark:text-blue-200 leading-snug">
+                <strong>Support Department Desk:</strong> Exchange text messages and PNG/JPG/WebP pictures with investors. Audio and video uploads are disabled.
+              </p>
+            </div>
+
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-[#6B7280] dark:text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="search"
+                value={supportSearch}
+                onChange={(e) => setSupportSearch(e.target.value)}
+                placeholder="Search tickets by subject, investor, or email..."
+                className="w-full h-9 pl-8 pr-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#111827] text-xs text-[#111827] dark:text-[#F8FAFC]"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              {(['all', 'open', 'in_progress', 'resolved', 'closed'] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setSupportStatusFilter(st)}
+                  className={`px-2.5 py-1.5 rounded-lg text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${
+                    supportStatusFilter === st
+                      ? 'bg-[#111827] dark:bg-[#2563EB] text-white'
+                      : 'bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#1E293B] text-[#4B5563] dark:text-[#94A3B8]'
+                  }`}
+                >
+                  {st === 'all' ? 'All Tickets' : SUPPORT_STATUS_LABELS[st]}
+                </button>
+              ))}
+            </div>
+
+            {filteredSupportTickets.length === 0 ? (
+              <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] px-4 py-8 text-center">
+                <p className="text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]">
+                  No investor support tickets match this filter
+                </p>
+              </div>
+            ) : (
+              filteredSupportTickets.map((tkt) => {
+                const draftText = supportReplyByTicket[tkt.id] ?? '';
+                const draftImg = supportImgByTicket[tkt.id];
+                const replying = busyId === `support-reply-${tkt.id}`;
+                return (
+                  <div
+                    key={tkt.id}
+                    className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-4 space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-[#111827] dark:bg-[#1E293B] text-white overflow-hidden flex items-center justify-center shrink-0">
+                          {tkt.investorAvatarUrl ? (
+                            <img
+                              src={tkt.investorAvatarUrl}
+                              alt={tkt.investorName}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xs font-bold">
+                              {tkt.investorName.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[#111827] dark:text-[#F8FAFC] truncate">
+                            {tkt.subject}
+                          </p>
+                          <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] truncate">
+                            {tkt.investorName} ({tkt.investorEmail}) · {tkt.category}
+                          </p>
+                        </div>
+                      </div>
+                      <select
+                        aria-label={`Ticket status for ${tkt.subject}`}
+                        disabled={busyId === `support-status-${tkt.id}`}
+                        value={tkt.status}
+                        onChange={(e) =>
+                          handleSupportStatusChange(
+                            tkt.id,
+                            e.target.value as SupportTicketStatus
+                          )
+                        }
+                        className="h-7 px-2 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] text-[10.5px] font-semibold text-[#111827] dark:text-[#F8FAFC] shrink-0"
+                      >
+                        <option value="open">Open</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Closed</option>
+                      </select>
+                    </div>
+
+                    <div className="rounded-xl bg-[#F9FAFB] dark:bg-[#0B1120] border border-[#E5E7EB] dark:border-[#1E293B] p-2.5 space-y-2 max-h-60 overflow-y-auto">
+                      {tkt.messages.map((m) => (
+                        <div
+                          key={m.id}
+                          className={`rounded-xl px-3 py-2 text-[11px] space-y-1.5 ${
+                            m.isStaff
+                              ? 'bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/60 ml-4'
+                              : 'bg-white dark:bg-[#111827] border border-[#E5E7EB] dark:border-[#334155] mr-4'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-[9.5px] text-[#6B7280] dark:text-[#94A3B8]">
+                            <span className="font-bold text-[#111827] dark:text-[#F8FAFC]">
+                              {m.isStaff ? 'Support Department' : m.senderName}
+                            </span>
+                            <span>{formatDateTime(m.createdAt)}</span>
+                          </div>
+                          {m.body && (
+                            <p className="text-[#111827] dark:text-[#F8FAFC] whitespace-pre-wrap break-words leading-relaxed">
+                              {m.body}
+                            </p>
+                          )}
+                          {m.imageUrl && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewImg({
+                                  title: `${tkt.subject} — Attachment`,
+                                  url: m.imageUrl!,
+                                })
+                              }
+                              className="block rounded-lg overflow-hidden border border-[#D1D5DB] dark:border-[#334155] cursor-pointer"
+                            >
+                              <img
+                                src={m.imageUrl}
+                                alt="Support ticket attachment"
+                                className="max-h-36 w-auto object-cover"
+                              />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <form
+                      onSubmit={(e) => handleSupportReply(e, tkt.id)}
+                      className="space-y-2"
+                    >
+                      {draftImg && (
+                        <div className="relative inline-block">
+                          <img
+                            src={draftImg}
+                            alt="Reply picture preview"
+                            className="h-16 rounded-lg border border-[#D1D5DB] dark:border-[#334155] object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSupportImgByTicket((prev) => {
+                                const next = { ...prev };
+                                delete next[tkt.id];
+                                return next;
+                              })
+                            }
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center cursor-pointer"
+                            aria-label="Remove attached picture"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+
+                      <textarea
+                        rows={2}
+                        value={draftText}
+                        onChange={(e) =>
+                          setSupportReplyByTicket((prev) => ({
+                            ...prev,
+                            [tkt.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="Write Support Department reply (text & pictures only)..."
+                        className="w-full p-2.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
+                      />
+
+                      <div className="flex items-center gap-2">
+                        <label className="h-9 px-2.5 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#1E293B] text-[11px] font-semibold text-[#111827] dark:text-[#F8FAFC] inline-flex items-center gap-1 cursor-pointer shrink-0">
+                          <ImageIcon className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />
+                          <span>Picture</span>
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={(e) =>
+                              handleImageUpload(e, (url) =>
+                                setSupportImgByTicket((prev) => ({
+                                  ...prev,
+                                  [tkt.id]: url,
+                                }))
+                              )
+                            }
+                            className="sr-only"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={replying}
+                          className="flex-1 h-9 rounded-xl bg-[#2563EB] text-white text-[11px] font-semibold inline-flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>{replying ? 'Sending...' : 'Send Reply'}</span>
+                        </button>
+                        {canManageDownwardUsers && (
+                          <button
+                            type="button"
+                            disabled={busyId === `support-del-${tkt.id}`}
+                            onClick={() => handleDeleteSupportTicket(tkt.id)}
+                            aria-label={`Delete ticket ${tkt.subject}`}
+                            className="h-9 px-2.5 rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 inline-flex items-center justify-center cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+                );
+              })
+            )}
+          </div>
         ) : tab === 'users' ? (
           <div className="space-y-3">
-            {!isMaster && (
+            {!canManageDownwardUsers && (
               <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/50 p-3 text-[11px] text-amber-900 dark:text-amber-200">
-                Only <strong>Executive Operations</strong> or authorized{' '}
-                <strong>Technical Department</strong> leads can create, edit, reset passwords,
-                or modify department roles system-wide.
+                Your Compliance &amp; Support role can verify KYC records and answer support tickets for assigned accounts. Account provisioning requires <strong>Department Officer</strong> clearance or higher.
               </div>
             )}
 
@@ -1241,7 +1604,7 @@ export function AdminView({
                           </div>
                         </div>
 
-                        {isMaster && (
+                        {canManageDownwardUsers && (
                           <div className="flex items-center gap-2">
                             {matchedUser && (
                               <button
@@ -1285,7 +1648,7 @@ export function AdminView({
                   className="w-full h-10 pl-8 pr-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#111827] text-xs text-[#111827] dark:text-[#F8FAFC]"
                 />
               </div>
-              {isMaster && (
+              {canManageDownwardUsers && (
                 <button
                   type="button"
                   onClick={() => setShowCreateUser(true)}
@@ -1349,7 +1712,7 @@ export function AdminView({
                     </span>
                   </div>
 
-                  {isMaster && (
+                  {canManageDownwardUsers && (
                     <div className="pt-2 border-t border-[#F3F4F6] dark:border-[#1E293B] flex flex-wrap items-center gap-2">
                       {!isTargetMaster && (
                         <div className="flex items-center gap-1 flex-1 min-w-[140px]">
@@ -1363,9 +1726,11 @@ export function AdminView({
                             }
                             className="flex-1 h-9 px-2 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-[#F9FAFB] dark:bg-[#0F172A] text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]"
                           >
-                            <option value="investor">Investor</option>
-                            <option value="moderator">Compliance Desk</option>
-                            <option value="admin">Dept Officer</option>
+                            {assignableRoles.map((roleOpt) => (
+                              <option key={roleOpt} value={roleOpt}>
+                                {ROLE_LABELS[roleOpt]}
+                              </option>
+                            ))}
                           </select>
                         </div>
                       )}
@@ -1483,8 +1848,22 @@ export function AdminView({
                 )}
               </div>
 
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-[#6B7280] dark:text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={fleetSearch}
+                  onChange={(e) => {
+                    setFleetSearch(e.target.value);
+                    setFleetVisible(24);
+                  }}
+                  placeholder={`Filter ${data?.robots.length ?? 114} units by code, name, or hub...`}
+                  className="w-full h-9 pl-8 pr-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#111827] text-xs text-[#111827] dark:text-[#F8FAFC]"
+                />
+              </div>
+
               <div className="space-y-2.5">
-                {(data?.robots ?? []).map((robot) => (
+                {filteredRobots.slice(0, fleetVisible).map((robot) => (
                   <div
                     key={robot.id}
                     className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-3.5 flex items-center justify-between gap-3"
@@ -1530,6 +1909,25 @@ export function AdminView({
                   </div>
                 ))}
               </div>
+
+              {fleetVisible < filteredRobots.length && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFleetVisible((v) => v + 24)}
+                    className="h-9 rounded-xl bg-[#111827] dark:bg-[#2563EB] text-white text-xs font-semibold cursor-pointer"
+                  >
+                    Load {Math.min(24, filteredRobots.length - fleetVisible)} more
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFleetVisible(filteredRobots.length)}
+                    className="h-9 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#111827] text-xs font-semibold text-[#111827] dark:text-[#F8FAFC] cursor-pointer"
+                  >
+                    Show all ({filteredRobots.length})
+                  </button>
+                </div>
+              )}
             </section>
 
             {/* Active Investor Rentals Management */}
@@ -1621,7 +2019,7 @@ export function AdminView({
           /* App CMS, SiteConfig, Crypto Wallets, Notifications & Dispatches */
           <div className="space-y-4">
             {/* 1. Broadcast / Direct Notification */}
-            {isMaster && (
+            {canManageDownwardUsers && (
               <form
                 onSubmit={handleSendNotification}
                 className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E293B] bg-white dark:bg-[#111827] p-4 space-y-3"
@@ -1844,6 +2242,119 @@ export function AdminView({
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#F3F4F6] dark:border-[#1E293B]">
+                  <div>
+                    <label className="block text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
+                      Withdraw Rule Fee (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="90"
+                      step="0.1"
+                      value={activeSite.withdrawFeePct ?? 27}
+                      onChange={(e) =>
+                        setSiteDraft({
+                          ...activeSite,
+                          withdrawFeePct: Number(e.target.value),
+                        })
+                      }
+                      className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-xs text-[#111827] dark:text-[#F8FAFC]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
+                      Daily Withdraw Limit
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={activeSite.dailyWithdrawLimit ?? 3}
+                      onChange={(e) =>
+                        setSiteDraft({
+                          ...activeSite,
+                          dailyWithdrawLimit: Number(e.target.value),
+                        })
+                      }
+                      className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-xs text-[#111827] dark:text-[#F8FAFC]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
+                      Processing Window (Days)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={activeSite.withdrawProcessingDays ?? 2}
+                      onChange={(e) =>
+                        setSiteDraft({
+                          ...activeSite,
+                          withdrawProcessingDays: Number(e.target.value),
+                        })
+                      }
+                      className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-xs text-[#111827] dark:text-[#F8FAFC]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
+                      Min Withdraw ($)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={activeSite.minWithdrawUsd ?? 50}
+                      onChange={(e) =>
+                        setSiteDraft({
+                          ...activeSite,
+                          minWithdrawUsd: Number(e.target.value),
+                        })
+                      }
+                      className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] font-mono text-xs text-[#111827] dark:text-[#F8FAFC]"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] rounded-lg bg-[#F9FAFB] dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-[#1E293B] px-2.5 py-2">
+                  Auto Deposit Floor: <strong className="font-mono text-[#111827] dark:text-[#F8FAFC]">{formatUsd(minActiveFleetUsd)}</strong> (tracks the least expensive open fleet unit automatically).
+                </p>
+
+                <div className="space-y-2 pt-1 border-t border-[#F3F4F6] dark:border-[#1E293B]">
+                  <p className="text-[10.5px] font-semibold text-[#111827] dark:text-[#F8FAFC]">
+                    &ldquo;How {activeSite.brandName} Works&rdquo; Guide Steps
+                  </p>
+                  {(activeSite.howItWorksSteps ?? []).map((step, sIdx) => (
+                    <div
+                      key={sIdx}
+                      className="rounded-xl border border-[#E5E7EB] dark:border-[#1E293B] bg-[#F9FAFB] dark:bg-[#0F172A] p-2.5 space-y-1.5"
+                    >
+                      <input
+                        type="text"
+                        value={step.title}
+                        onChange={(e) => {
+                          const next = [...(activeSite.howItWorksSteps ?? [])];
+                          next[sIdx] = { ...next[sIdx], title: e.target.value };
+                          setSiteDraft({ ...activeSite, howItWorksSteps: next });
+                        }}
+                        className="w-full h-8 px-2 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#111827] text-xs font-semibold text-[#111827] dark:text-[#F8FAFC]"
+                      />
+                      <textarea
+                        rows={2}
+                        value={step.body}
+                        onChange={(e) => {
+                          const next = [...(activeSite.howItWorksSteps ?? [])];
+                          next[sIdx] = { ...next[sIdx], body: e.target.value };
+                          setSiteDraft({ ...activeSite, howItWorksSteps: next });
+                        }}
+                        className="w-full p-2 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#111827] text-[11px] text-[#111827] dark:text-[#F8FAFC]"
+                      />
+                    </div>
+                  ))}
+                </div>
+
                 <div>
                   <label className="block text-[10.5px] text-[#6B7280] dark:text-[#94A3B8] mb-1">
                     Footer Notice
@@ -1863,7 +2374,7 @@ export function AdminView({
                   disabled={busyId === 'site-cfg'}
                   className="w-full h-10 rounded-xl bg-[#059669] text-white text-xs font-semibold cursor-pointer"
                 >
-                  Publish Site Display Changes Live
+                  Publish Site Display &amp; Rules Live
                 </button>
               </form>
             )}
@@ -2209,9 +2720,11 @@ export function AdminView({
                 onChange={(e) => setNewUserRole(e.target.value as UserRole)}
                 className="h-10 px-2 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
               >
-                <option value="investor">Investor</option>
-                <option value="moderator">Compliance Desk</option>
-                <option value="admin">Dept Officer</option>
+                {assignableRoles.map((roleOpt) => (
+                  <option key={roleOpt} value={roleOpt}>
+                    {ROLE_LABELS[roleOpt]}
+                  </option>
+                ))}
               </select>
               <select
                 value={newUserKyc}
@@ -2236,7 +2749,7 @@ export function AdminView({
                 onChange={(e) => setNewUserDepartment(e.target.value as CorporateDepartment)}
                 className="w-full h-10 px-3 rounded-xl border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
               >
-                {DEPARTMENTS.map((dept) => (
+                {selectableDepartments.map((dept) => (
                   <option key={dept} value={dept}>
                     {dept}
                   </option>
@@ -2502,9 +3015,11 @@ export function AdminView({
                       onChange={(e) => setEditRole(e.target.value as UserRole)}
                       className="w-full h-9 px-2 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
                     >
-                      <option value="investor">Investor</option>
-                      <option value="moderator">Compliance Desk</option>
-                      <option value="admin">Dept Officer</option>
+                      {assignableRoles.map((roleOpt) => (
+                        <option key={roleOpt} value={roleOpt}>
+                          {ROLE_LABELS[roleOpt]}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -2534,7 +3049,7 @@ export function AdminView({
                   onChange={(e) => setEditDepartment(e.target.value as CorporateDepartment)}
                   className="w-full h-9 px-2.5 rounded-lg border border-[#D1D5DB] dark:border-[#334155] bg-white dark:bg-[#0F172A] text-xs text-[#111827] dark:text-[#F8FAFC]"
                 >
-                  {DEPARTMENTS.map((dept) => (
+                  {selectableDepartments.map((dept) => (
                     <option key={dept} value={dept}>
                       {dept}
                     </option>

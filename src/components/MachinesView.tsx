@@ -70,6 +70,7 @@ export function MachinesView({
 }: MachinesViewProps) {
   const [category, setCategory] = useState<'All' | RobotCategory>('All');
   const [search, setSearch] = useState('');
+  const [visibleLimit, setVisibleLimit] = useState(24);
   const [selectedRobot, setSelectedRobot] = useState<RobotMachine | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -103,6 +104,10 @@ export function MachinesView({
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedRobot]);
 
+  useEffect(() => {
+    setVisibleLimit(24);
+  }, [category, search]);
+
   const filteredRobots = useMemo(() => {
     const q = search.trim().toLowerCase();
     return robots.filter((r) => {
@@ -116,6 +121,11 @@ export function MachinesView({
       return catMatch && qMatch;
     });
   }, [robots, category, search]);
+
+  const visibleRobots = useMemo(
+    () => filteredRobots.slice(0, visibleLimit),
+    [filteredRobots, visibleLimit]
+  );
 
   const openMachineSheet = (robot: RobotMachine) => {
     setSelectedRobot(robot);
@@ -245,71 +255,100 @@ export function MachinesView({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {filteredRobots.map((robot) => {
-              const baseDailyUsd = (robot.rentalPrice * robot.dailyReturnRate) / 100;
-              const effectiveDaily = isDoubleActive ? baseDailyUsd * 2 : baseDailyUsd;
-              const refBonus =
-                typeof robot.referralBonusUsd === 'number'
-                  ? robot.referralBonusUsd
-                  : Number(((robot.rentalPrice * rewardPct) / 100).toFixed(2));
-              return (
-                <article
-                  key={robot.id}
-                  onClick={() => openMachineSheet(robot)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      openMachineSheet(robot);
-                    }
-                  }}
-                  className="group cursor-pointer overflow-hidden rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] hover:border-[#94A3B8] dark:hover:border-[#334155] bg-white dark:bg-[#111827] flex flex-col transition-colors"
-                >
-                  <div className="aspect-[4/4] w-full overflow-hidden bg-[#F1F5F9] dark:bg-[#1E293B]">
-                    <RobotImage
-                      src={robot.imageUrl}
-                      alt={robot.name}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                    />
-                  </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-[11px] text-[#64748B] dark:text-[#94A3B8]">
+              <span>
+                Showing <strong className="text-[#0F172A] dark:text-[#F8FAFC]">{visibleRobots.length}</strong> of{' '}
+                <strong className="text-[#0F172A] dark:text-[#F8FAFC]">{filteredRobots.length}</strong> deployed units
+              </span>
+              <span>Invest in 1, 2, or more units</span>
+            </div>
 
-                  <div className="p-3 flex-1 flex flex-col justify-between space-y-2">
-                    <div>
-                      <p className="text-[10px] font-mono text-[#64748B] dark:text-[#94A3B8] truncate">
-                        {SHORT_CATEGORY[robot.category]} · {robot.availableUnits} open
-                      </p>
-                      <h2 className="mt-0.5 truncate text-xs font-semibold text-[#0F172A] dark:text-[#F8FAFC]">
-                        {robot.name}
-                      </h2>
-                      <p className="mt-0.5 line-clamp-2 text-[10.5px] leading-snug text-[#475569] dark:text-[#CBD5E1]">
-                        {robot.tagline}
-                      </p>
+            <div className="grid grid-cols-2 gap-3">
+              {visibleRobots.map((robot) => {
+                const baseDailyUsd = (robot.rentalPrice * robot.dailyReturnRate) / 100;
+                const effectiveDaily = isDoubleActive ? baseDailyUsd * 2 : baseDailyUsd;
+                const refBonus =
+                  typeof robot.referralBonusUsd === 'number'
+                    ? robot.referralBonusUsd
+                    : Number(((robot.rentalPrice * rewardPct) / 100).toFixed(2));
+                return (
+                  <article
+                    key={robot.id}
+                    onClick={() => openMachineSheet(robot)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openMachineSheet(robot);
+                      }
+                    }}
+                    className="group cursor-pointer overflow-hidden rounded-2xl border border-[#E2E8F0] dark:border-[#1E293B] hover:border-[#94A3B8] dark:hover:border-[#334155] bg-white dark:bg-[#111827] flex flex-col transition-colors"
+                  >
+                    <div className="aspect-[4/3] w-full overflow-hidden bg-[#F1F5F9] dark:bg-[#1E293B]">
+                      <RobotImage
+                        src={robot.imageUrl}
+                        alt={robot.name}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      />
                     </div>
 
-                    <div className="pt-2 border-t border-[#F1F5F9] dark:border-[#1E293B] space-y-0.5">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="font-mono tabular-nums text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-                          {formatUsd(robot.rentalPrice).replace('.00', '')}
-                        </span>
-                        <span className="font-mono tabular-nums text-[10.5px] font-semibold text-[#047857] dark:text-[#34D399]">
-                          {isDoubleActive
-                            ? `${(robot.dailyReturnRate * 2).toFixed(2)}% (2x)`
-                            : `${robot.dailyReturnRate.toFixed(2)}%`}
-                        </span>
+                    <div className="p-3 flex-1 flex flex-col justify-between space-y-2">
+                      <div>
+                        <p className="text-[10px] font-mono text-[#64748B] dark:text-[#94A3B8] truncate">
+                          {robot.modelCode} · {robot.availableUnits > 0 ? `${robot.availableUnits} open` : 'Leased'}
+                        </p>
+                        <h2 className="mt-0.5 truncate text-xs font-semibold text-[#0F172A] dark:text-[#F8FAFC]">
+                          {robot.name}
+                        </h2>
+                        <p className="mt-0.5 line-clamp-2 text-[10.5px] leading-snug text-[#475569] dark:text-[#CBD5E1]">
+                          {robot.tagline}
+                        </p>
                       </div>
-                      <p className="font-mono tabular-nums text-[10px] text-[#64748B] dark:text-[#94A3B8]">
-                        {formatUsd(effectiveDaily)}/day · {robot.cycleDays}d
-                      </p>
-                      <p className="font-mono tabular-nums text-[10px] text-[#2563EB] dark:text-[#60A5FA] font-semibold truncate">
-                        Invite: +{formatUsd(refBonus)}
-                      </p>
+
+                      <div className="pt-2 border-t border-[#F1F5F9] dark:border-[#1E293B] space-y-0.5">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-mono tabular-nums text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC]">
+                            {formatUsd(robot.rentalPrice).replace('.00', '')}
+                          </span>
+                          <span className="font-mono tabular-nums text-[10.5px] font-semibold text-[#047857] dark:text-[#34D399]">
+                            {isDoubleActive
+                              ? `${(robot.dailyReturnRate * 2).toFixed(2)}% (2x)`
+                              : `${robot.dailyReturnRate.toFixed(2)}%`}
+                          </span>
+                        </div>
+                        <p className="font-mono tabular-nums text-[10px] text-[#64748B] dark:text-[#94A3B8]">
+                          {formatUsd(effectiveDaily)}/day · {robot.cycleDays}d
+                        </p>
+                        <p className="font-mono tabular-nums text-[10px] text-[#2563EB] dark:text-[#60A5FA] font-semibold truncate">
+                          Invite: +{formatUsd(refBonus)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
+                  </article>
+                );
+              })}
+            </div>
+
+            {visibleRobots.length < filteredRobots.length && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setVisibleLimit((prev) => prev + 24)}
+                  className="h-10 rounded-xl bg-[#0B1220] dark:bg-[#2563EB] text-white text-xs font-semibold cursor-pointer"
+                >
+                  Load {Math.min(24, filteredRobots.length - visibleRobots.length)} more
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibleLimit(filteredRobots.length)}
+                  className="h-10 rounded-xl border border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#111827] text-xs font-semibold text-[#0F172A] dark:text-[#F8FAFC] cursor-pointer"
+                >
+                  Show all ({filteredRobots.length})
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -465,7 +504,7 @@ export function MachinesView({
                       Units to rent
                     </p>
                     <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8]">
-                      {selectedRobot.availableUnits} of {selectedRobot.totalUnits} open
+                      {selectedRobot.availableUnits} of {selectedRobot.totalUnits} open · Invest across multiple units
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

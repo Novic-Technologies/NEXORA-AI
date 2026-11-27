@@ -16,6 +16,9 @@ import type {
   RobotCategory,
   RobotMachine,
   SiteConfig,
+  SupportTicket,
+  SupportTicketCategory,
+  SupportTicketStatus,
   UserRole,
   WalletTransaction,
 } from '../types.ts';
@@ -60,6 +63,7 @@ export interface OverviewResponse {
   stats: {
     totalFleetUnits: number;
     availableFleetUnits: number;
+    minDepositUsd: number;
     activeHubs: number;
     dailyRateRange: string;
     supportedCoins: number;
@@ -520,6 +524,71 @@ export function advanceAllRentalsCycle(): Promise<{ ok: boolean; updated: number
   return apiRequest('/api/admin/rentals/advance-all', {
     method: 'POST',
   });
+}
+
+// Investor & Department Support Desk (Pictures & Text Messages Only)
+export function fetchSupportTickets(): Promise<{ tickets: SupportTicket[] }> {
+  return apiRequest<{ tickets: SupportTicket[] }>('/api/support/tickets');
+}
+
+export function createSupportTicket(payload: {
+  subject: string;
+  category: SupportTicketCategory;
+  message: string;
+  imageUrl?: string;
+}): Promise<{ ticket: SupportTicket }> {
+  return apiRequest<{ ticket: SupportTicket }>('/api/support/tickets', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function sendSupportMessage(
+  ticketId: string,
+  payload: { message: string; imageUrl?: string }
+): Promise<{ ticket: SupportTicket }> {
+  return apiRequest<{ ticket: SupportTicket }>(
+    `/api/support/tickets/${encodeURIComponent(ticketId)}/messages`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function replyAdminSupportTicket(
+  ticketId: string,
+  payload: { message: string; imageUrl?: string; status?: SupportTicketStatus }
+): Promise<{ ticket: SupportTicket }> {
+  return apiRequest<{ ticket: SupportTicket }>(
+    `/api/admin/support/tickets/${encodeURIComponent(ticketId)}/reply`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function updateAdminSupportTicketStatus(
+  ticketId: string,
+  payload: { status: SupportTicketStatus }
+): Promise<{ ticket: SupportTicket }> {
+  return apiRequest<{ ticket: SupportTicket }>(
+    `/api/admin/support/tickets/${encodeURIComponent(ticketId)}/status`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteAdminSupportTicket(ticketId: string): Promise<{ ok: boolean }> {
+  return apiRequest<{ ok: boolean }>(
+    `/api/admin/support/tickets/${encodeURIComponent(ticketId)}`,
+    {
+      method: 'DELETE',
+    }
+  );
 }
 
 export function formatUsd(amount: number, decimals = 2): string {
